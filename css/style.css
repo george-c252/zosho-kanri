@@ -1,0 +1,85 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+h1 {
+  font-size: 1.1rem;
+  margin: 4px 0 8px;
+}
+
+#status {
+  min-height: 1.4em;
+  font-size: 0.9rem;
+  margin: 4px 0;
+}
+
+#viewfinder {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: #000;
+  border-radius: 8px;
+}
+
+#result {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  background: #16213e;
+  border-radius: 8px;
+}
+
+#cover {
+  width: 80px;
+  height: auto;
+  align-self: flex-start;
+}
+
+.book-info p {
+  margin: 2px 0;
+  font-size: 0.9rem;
+}
+
+#book-title {
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+#manual-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#manual-isbn {
+  flex: 1;
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #0f0f1a;
+  color: #eee;
+}
+
+#manual-form button {
+  padding: 8px 16px;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: none;
+  background: #4a7cff;
+  color: #fff;
+}

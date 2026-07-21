@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>蔵書管理 — M1スキャン検証</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main>
+    <h1>蔵書管理 M1検証</h1>
+    <p id="status">カメラ起動中…</p>
+    <video id="viewfinder" autoplay muted playsinline></video>
+    <section id="result" hidden>
+      <img id="cover" alt="表紙" hidden>
+      <div class="book-info">
+        <p id="book-title"></p>
+        <p id="book-author"></p>
+        <p id="book-publisher"></p>
+        <p id="book-isbn"></p>
+      </div>
+    </section>
+    <form id="manual-form">
+      <input id="manual-isbn" inputmode="numeric" maxlength="13" placeholder="ISBN手入力（978から13桁）">
+      <button type="submit">検索</button>
+    </form>
+  </main>
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
+          integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
+          crossorigin="anonymous"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
