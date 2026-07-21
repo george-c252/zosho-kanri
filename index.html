@@ -3,28 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>蔵書管理 — M1スキャン検証</title>
+  <title>蔵書管理</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <main>
-    <h1>蔵書管理 M1検証</h1>
-    <p id="status">カメラ起動中…</p>
-    <video id="viewfinder" autoplay muted playsinline></video>
-    <section id="result" hidden>
-      <img id="cover" alt="表紙" hidden>
-      <div class="book-info">
-        <p id="book-title"></p>
-        <p id="book-author"></p>
-        <p id="book-publisher"></p>
-        <p id="book-isbn"></p>
-      </div>
+    <!-- スキャン画面 -->
+    <section id="tab-scan" class="tab">
+      <p id="status">カメラ起動中…</p>
+      <video id="viewfinder" autoplay muted playsinline></video>
+      <form id="manual-form">
+        <input id="manual-isbn" inputmode="numeric" maxlength="13" placeholder="ISBN手入力（978から13桁）">
+        <button type="submit">検索</button>
+      </form>
+      <section id="result" hidden>
+        <div id="dup-banner" hidden></div>
+        <div class="book-row">
+          <img id="cover" alt="表紙" hidden>
+          <div class="book-info">
+            <p id="book-title"></p>
+            <p id="book-author"></p>
+            <p id="book-publisher"></p>
+            <p id="book-isbn"></p>
+          </div>
+        </div>
+        <!-- 書誌API全滅時の手入力（仕様§5.2: 登録は必ず完了できる） -->
+        <div id="manual-book" hidden>
+          <input id="manual-title" placeholder="タイトル（必須）">
+          <input id="manual-author" placeholder="著者">
+        </div>
+        <div class="register-row">
+          <button id="reg-paper" type="button">📕 紙で登録</button>
+          <button id="reg-ebook" type="button">📱 電子で登録</button>
+        </div>
+      </section>
     </section>
-    <form id="manual-form">
-      <input id="manual-isbn" inputmode="numeric" maxlength="13" placeholder="ISBN手入力（978から13桁）">
-      <button type="submit">検索</button>
-    </form>
+
+    <!-- 蔵書一覧画面 -->
+    <section id="tab-shelf" class="tab" hidden>
+      <input id="shelf-search" type="search" placeholder="タイトル・著者で検索">
+      <p id="shelf-count"></p>
+      <ul id="book-list"></ul>
+    </section>
   </main>
+
+  <nav id="tabbar">
+    <button data-tab="scan" class="active" type="button">📷 スキャン</button>
+    <button data-tab="shelf" type="button">📚 蔵書</button>
+  </nav>
+
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>

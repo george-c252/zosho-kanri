@@ -12,12 +12,7 @@ body {
 main {
   max-width: 480px;
   margin: 0 auto;
-  padding: 12px;
-}
-
-h1 {
-  font-size: 1.1rem;
-  margin: 4px 0 8px;
+  padding: 12px 12px calc(64px + env(safe-area-inset-bottom));
 }
 
 #status {
@@ -35,12 +30,33 @@ h1 {
 }
 
 #result {
-  display: flex;
-  gap: 12px;
   margin-top: 12px;
   padding: 12px;
   background: #16213e;
   border-radius: 8px;
+}
+
+#dup-banner {
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.banner-owned {
+  background: #b3261e;
+  color: #fff;
+}
+
+.banner-new {
+  background: #1e7d43;
+  color: #fff;
+}
+
+.book-row {
+  display: flex;
+  gap: 12px;
 }
 
 #cover {
@@ -59,20 +75,46 @@ h1 {
   font-size: 1rem;
 }
 
+#manual-book {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.register-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.register-row button {
+  flex: 1;
+  padding: 10px;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: none;
+  background: #4a7cff;
+  color: #fff;
+}
+
 #manual-form {
   display: flex;
   gap: 8px;
   margin-top: 12px;
 }
 
-#manual-isbn {
-  flex: 1;
+input {
   padding: 8px;
   font-size: 1rem;
   border-radius: 6px;
   border: 1px solid #555;
   background: #0f0f1a;
   color: #eee;
+}
+
+#manual-isbn {
+  flex: 1;
 }
 
 #manual-form button {
@@ -82,4 +124,101 @@ h1 {
   border: none;
   background: #4a7cff;
   color: #fff;
+}
+
+/* 蔵書一覧 */
+#shelf-search {
+  width: 100%;
+}
+
+#shelf-count {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin: 8px 0;
+}
+
+#book-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.book-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #2a2a45;
+}
+
+.book-item img,
+.cover-placeholder {
+  width: 44px;
+  height: 62px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #16213e;
+  font-size: 1.4rem;
+}
+
+.item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-sub {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.delete-btn {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #b3261e;
+  background: transparent;
+  color: #ff8a80;
+}
+
+/* 下部タブバー */
+#tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: #0f0f1a;
+  border-top: 1px solid #2a2a45;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+#tabbar button {
+  flex: 1;
+  padding: 12px 0;
+  font-size: 1rem;
+  border: none;
+  background: transparent;
+  color: #888;
+}
+
+#tabbar button.active {
+  color: #4a7cff;
+  font-weight: bold;
 }
