@@ -4,12 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>蔵書管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <main>
     <!-- スキャン画面 -->
     <section id="tab-scan" class="tab">
+      <div class="screen-head">
+        <h1>スキャン</h1>
+      </div>
       <p id="status">カメラ起動中…</p>
       <video id="viewfinder" autoplay muted playsinline></video>
       <form id="manual-form">
@@ -39,17 +45,50 @@
       </section>
     </section>
 
-    <!-- 蔵書一覧画面 -->
+    <!-- 蔵書一覧画面（本棚/一覧の2ビュー切替。デザインの正: design/design_spec.json） -->
     <section id="tab-shelf" class="tab" hidden>
-      <input id="shelf-search" type="search" placeholder="タイトル・著者で検索">
-      <p id="shelf-count"></p>
-      <ul id="book-list"></ul>
+      <div class="screen-head">
+        <h1>本棚<span class="count" id="shelf-head-count"></span></h1>
+        <div id="view-toggle">
+          <button type="button" data-view="realistic" class="active">本棚</button>
+          <button type="button" data-view="list">一覧</button>
+        </div>
+      </div>
+      <div id="shelf-realistic"></div>
+      <div id="shelf-list" hidden>
+        <input id="shelf-search" type="search" placeholder="タイトル・著者で検索">
+        <p id="shelf-count"></p>
+        <ul id="book-list"></ul>
+      </div>
     </section>
   </main>
 
+  <!-- 書籍詳細（ボトムシート） -->
+  <div id="detail-veil">
+    <div id="detail-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-body">
+        <div id="detail-cover-slot"></div>
+        <div class="sheet-info">
+          <h2 id="detail-title"></h2>
+          <p id="detail-author"></p>
+          <dl class="detail-rows">
+            <dt>出版社</dt><dd id="detail-publisher"></dd>
+            <dt>形式</dt><dd id="detail-format"></dd>
+            <dt>ISBN</dt><dd id="detail-isbn"></dd>
+            <dt>登録日</dt><dd id="detail-added"></dd>
+          </dl>
+        </div>
+      </div>
+      <div class="sheet-actions">
+        <button id="detail-delete" class="delete-btn" type="button">この本を削除</button>
+      </div>
+    </div>
+  </div>
+
   <nav id="tabbar">
+    <button data-tab="shelf" type="button">📚 本棚</button>
     <button data-tab="scan" class="active" type="button">📷 スキャン</button>
-    <button data-tab="shelf" type="button">📚 蔵書</button>
   </nav>
 
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
