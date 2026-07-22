@@ -6,9 +6,9 @@
   <title>蔵書管理</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <!-- ?v= はキャッシュ更新用。デプロイ時に日付を上げる（M3のsw.jsで正式なバージョン管理に移行） -->
-  <link rel="stylesheet" href="css/style.css?v=20260722-3">
+  <link rel="stylesheet" href="css/style.css?v=20260722-4">
 </head>
 <body>
   <main>
@@ -18,7 +18,15 @@
         <h1>スキャン</h1>
       </div>
       <p id="status"></p>
-      <video id="viewfinder" autoplay muted playsinline></video>
+      <!-- 朱色コーナー＋走査線はプロトタイプ本棚.dc.htmlのスキャン枠を移植 -->
+      <div id="viewfinder-wrap">
+        <video id="viewfinder" autoplay muted playsinline></video>
+        <span class="scan-corner tl"></span>
+        <span class="scan-corner tr"></span>
+        <span class="scan-corner bl"></span>
+        <span class="scan-corner br"></span>
+        <div id="scan-line"></div>
+      </div>
       <form id="manual-form">
         <input id="manual-isbn" inputmode="numeric" maxlength="13" placeholder="ISBN手入力（978から13桁）">
         <button type="submit">検索</button>
@@ -88,6 +96,7 @@
         <button id="act-finish" class="status-btn" type="button" hidden>読了にする</button>
         <button id="act-shake" class="shake-btn" type="button" hidden>🔖 スマホを振ってしおりを飛ばす</button>
       </div>
+      <p id="shake-hint" hidden>読みかけの本 — 実機なら本体を振ってもOK</p>
       <div class="sheet-actions">
         <button id="detail-delete" class="delete-btn" type="button">この本を削除</button>
       </div>
@@ -105,6 +114,6 @@
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>
-  <script type="module" src="js/main.js?v=20260722-3"></script>
+  <script type="module" src="js/main.js?v=20260722-4"></script>
 </body>
 </html>

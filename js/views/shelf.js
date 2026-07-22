@@ -7,21 +7,25 @@ const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 // データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
 const STATUS_LABEL = { unread: '未読', reading: '読書中', finished: '読了' };
 
-// 背表紙パレット（design_spec.jsonの世界観に合わせた落ち着いた和色。
-// 3段フォールバックの③: タイトルhashで割当。①撮影写真②表紙色抽出はM4以降 — 仕様§6.1）
+// 背表紙パレット（プロトタイプ本棚.dc.htmlのSPINES 16色を移植）。
+// 3段フォールバックの③: タイトルhashで割当。①撮影写真②表紙色抽出はM4以降 — 仕様§6.1
 const SPINE_PALETTE = [
-  { bg: '#2e4a66', fg: '#f3ead6' }, // 藍
-  { bg: '#5d3a45', fg: '#f3ead6' }, // 海老茶
-  { bg: '#3d5647', fg: '#f3ead6' }, // 千歳緑
-  { bg: '#8a5a2b', fg: '#f3ead6' }, // 琥珀
-  { bg: '#54455e', fg: '#f3ead6' }, // 竜胆
-  { bg: '#7d2f35', fg: '#f3ead6' }, // 蘇芳
-  { bg: '#31424e', fg: '#f3ead6' }, // 藍鼠
-  { bg: '#9d7a2f', fg: '#3a2a16' }, // 芥子
-  { bg: '#e8e0cd', fg: '#3a2a16' }, // 生成
-  { bg: '#4f7a83', fg: '#f3ead6' }, // 錆浅葱
-  { bg: '#8f5d68', fg: '#f3ead6' }, // 梅鼠
-  { bg: '#6b6f45', fg: '#3a2a16' }, // 松葉
+  { bg: '#2f3d5a', fg: '#f3ead6' },
+  { bg: '#3a5140', fg: '#f0ead6' },
+  { bg: '#6d2b34', fg: '#f3e2d0' },
+  { bg: '#b9862f', fg: '#2b1e0c' },
+  { bg: '#2f5d5b', fg: '#eef3ec' },
+  { bg: '#3a3a42', fg: '#e6e2da' },
+  { bg: '#e6dcc0', fg: '#4a3a24' },
+  { bg: '#b5623f', fg: '#f6e6d8' },
+  { bg: '#4a3350', fg: '#efe4ee' },
+  { bg: '#7d8a5f', fg: '#2b2f18' },
+  { bg: '#4a5560', fg: '#eef1f4' },
+  { bg: '#8f4a2c', fg: '#f3e2d0' },
+  { bg: '#324a3a', fg: '#e9f0e6' },
+  { bg: '#93304a', fg: '#f6e2ea' },
+  { bg: '#d8c48a', fg: '#463414' },
+  { bg: '#3b4d6b', fg: '#eef1f6' },
 ];
 
 const SPINES_PER_ROW = 7; // design_spec.json: 7冊ごとに棚板で段を分割
@@ -88,6 +92,7 @@ function renderStatus(book) {
   document.getElementById('act-start').hidden = status === 'reading';
   document.getElementById('act-finish').hidden = status !== 'unread';
   document.getElementById('act-shake').hidden = status !== 'reading';
+  document.getElementById('shake-hint').hidden = status !== 'reading';
 }
 
 async function setStatusAndSave(status, message) {
@@ -144,12 +149,19 @@ function openDetail(book) {
     img.alt = '';
     slot.appendChild(img);
   } else {
+    // プロトタイプのcoverStyle: 背表紙色グラデ＋書名上・著者下（背の帯とハイライトはCSSの::before/::after）
     const ph = document.createElement('div');
     ph.className = 'detail-cover-ph';
     const { color } = spineStyle(book);
-    ph.style.background = color.bg;
+    ph.style.background = `linear-gradient(150deg, ${color.bg}, ${color.bg} 60%, rgba(0,0,0,.25))`;
     ph.style.color = color.fg;
-    ph.textContent = book.title || '（タイトル不明）';
+    const phTitle = document.createElement('div');
+    phTitle.className = 'ph-title';
+    phTitle.textContent = book.title || '（タイトル不明）';
+    const phAuthor = document.createElement('div');
+    phAuthor.className = 'ph-author';
+    phAuthor.textContent = book.author || '';
+    ph.append(phTitle, phAuthor);
     slot.appendChild(ph);
   }
   document.getElementById('detail-title').textContent = book.title || '（タイトル不明）';
