@@ -794,6 +794,81 @@ input::placeholder {
   100% { opacity: 0; transform: translate(-200px, -470px) rotate(34deg) scale(.85); }
 }
 
+/* ---- 背表紙写真のトリミング画面 ---- */
+#crop-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  background: radial-gradient(90% 70% at 50% 40%, #26221c, #0d0b08);
+}
+
+.crop-hint {
+  margin: 0;
+  text-align: center;
+  color: #d7c8a8;
+  font-size: 12px;
+  letter-spacing: .5px;
+}
+
+#crop-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 16px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#crop-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  -webkit-user-drag: none;
+}
+
+#crop-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 100vmax rgba(8, 6, 4, .55);
+  pointer-events: none;
+}
+
+.crop-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.crop-actions button {
+  flex: 1;
+  padding: 13px;
+  border-radius: 14px;
+  border: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+#crop-cancel {
+  background: rgba(255, 255, 255, .14);
+  color: #f3ead6;
+}
+
+#crop-ok {
+  background: linear-gradient(160deg, var(--accent), var(--accent-deep));
+  color: #fff;
+}
+
 /* ---- トースト（design_spec.json: hondanaToast 2.4s） ---- */
 #toast {
   position: fixed;

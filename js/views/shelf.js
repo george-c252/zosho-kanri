@@ -2,7 +2,7 @@
 // デザインの正: design/design_spec.json（本棚=realistic、一覧=list）
 
 import { getAllBooks, deleteBook, updateBook } from '../db.js';
-import { stripParallelTitle, fetchCoverUrl } from '../bookapi.js';
+import { stripParallelTitle, amazonCoverUrl } from '../bookapi.js';
 
 const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 // データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
@@ -175,6 +175,7 @@ function attachGrabGesture(el, getBook) {
     if (isGrabbed) {
       isGrabbed = false;
       el.classList.remove('grabbed');
+      el.style.transform = ''; // 棚の元の位置へ戻る（CSS transition）
     }
   };
 
@@ -188,6 +189,7 @@ function attachGrabGesture(el, getBook) {
     timer = setTimeout(() => {
       isGrabbed = true;
       el.classList.add('grabbed');
+      el.style.transform = 'translateY(-12px) scale(1.07)'; // 棚から持ち上げる
       if (navigator.vibrate) navigator.vibrate(30);
     }, GRAB_MS);
   });
@@ -197,6 +199,9 @@ function attachGrabGesture(el, getBook) {
       if (timer && Math.abs(e.clientX - startX) > 12) release();
       return;
     }
+    // 掴んだ本は指についてくる（左右の振りで少し傾く）
+    el.style.transform =
+      `translate(${e.clientX - startX}px, -12px) scale(1.07) rotate(${dir * 5}deg)`;
     const delta = e.clientX - extremeX;
     if (dir === 0) {
       if (Math.abs(delta) >= RUB_SWING_PX) {
@@ -270,7 +275,11 @@ function openDetail(book) {
     img.src = book.coverUrl;
     img.alt = '';
     img.draggable = false;
-    img.addEventListener('error', () => img.replaceWith(buildCoverPh(book))); // 表紙URL切れはプレースホルダーに戻す
+    // 表紙URL切れ、またはAmazon書影の「画像なし1x1 GIF」はプレースホルダーに戻す
+    img.addEventListener('error', () => img.replaceWith(buildCoverPh(book)));
+    img.addEventListener('load', () => {
+      if (img.naturalWidth <= 1) img.replaceWith(buildCoverPh(book));
+    });
     slot.appendChild(img);
   } else {
     slot.appendChild(buildCoverPh(book));
@@ -382,11 +391,15 @@ function renderItem(book) {
     img.src = book.coverUrl;
     img.alt = '';
     img.loading = 'lazy';
-    img.addEventListener('error', () => {
+    const toPh = () => {
       const ph = document.createElement('div');
       ph.className = 'cover-placeholder';
       ph.textContent = '📖';
       img.replaceWith(ph);
+    };
+    img.addEventListener('error', toPh);
+    img.addEventListener('load', () => {
+      if (img.naturalWidth <= 1) toPh(); // Amazon書影の「画像なし1x1 GIF」対策
     });
     li.appendChild(img);
   } else {
@@ -449,17 +462,119 @@ export async function refreshShelf() {
   render();
 }
 
-// 背表紙写真は表示幅が小さいためJPEG縮小して保存（IndexedDB肥大防止）
-async function resizeToBlob(file, maxH = 480) {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, maxH / bmp.height);
+/* ---- 背表紙写真のトリミング（枠に合わせてドラッグ・2本指ピンチで調整） ---- */
+
+const crop = {
+  scale: 1,
+  tx: 0,
+  ty: 0,
+  pointers: new Map(), // pointerId -> {x, y}
+  url: '',
+  onDone: null,
+};
+
+const cropEl = (id) => document.getElementById(id);
+
+function cropApply() {
+  cropEl('crop-img').style.transform = `translate(${crop.tx}px, ${crop.ty}px) scale(${crop.scale})`;
+}
+
+function openCropper(file, aspect, onDone) {
+  crop.url = URL.createObjectURL(file);
+  crop.onDone = onDone;
+  crop.pointers.clear();
+  const frame = cropEl('crop-frame');
+  const fh = Math.min(Math.round(window.innerHeight * 0.5), 480);
+  frame.style.height = `${fh}px`;
+  frame.style.width = `${Math.max(56, Math.round((fh * aspect.w) / aspect.h))}px`;
+  cropEl('crop-img').src = crop.url; // 初期配置はloadイベントで
+  cropEl('crop-veil').hidden = false;
+}
+
+function closeCropper() {
+  cropEl('crop-veil').hidden = true;
+  if (crop.url) URL.revokeObjectURL(crop.url);
+  crop.url = '';
+  crop.onDone = null;
+  crop.pointers.clear();
+}
+
+// 画像読み込み時: 枠を覆う最小倍率で枠中央に配置
+function cropInitLayout() {
+  const img = cropEl('crop-img');
+  const stageR = cropEl('crop-stage').getBoundingClientRect();
+  const frameR = cropEl('crop-frame').getBoundingClientRect();
+  crop.scale = Math.max(frameR.width / img.naturalWidth, frameR.height / img.naturalHeight);
+  crop.tx = frameR.left - stageR.left + (frameR.width - img.naturalWidth * crop.scale) / 2;
+  crop.ty = frameR.top - stageR.top + (frameR.height - img.naturalHeight * crop.scale) / 2;
+  cropApply();
+}
+
+async function cropConfirm() {
+  const img = cropEl('crop-img');
+  const imgR = img.getBoundingClientRect();
+  const frameR = cropEl('crop-frame').getBoundingClientRect();
+  const s = imgR.width / img.naturalWidth; // 画面px → 元画像px
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(bmp.width * scale));
-  canvas.height = Math.max(1, Math.round(bmp.height * scale));
-  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  bmp.close();
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.85));
+  canvas.height = 480;
+  canvas.width = Math.max(1, Math.round((480 * frameR.width) / frameR.height));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#d3b485'; // 枠が画像からはみ出た部分は木目ベース色で埋める
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(
+    img,
+    (frameR.left - imgR.left) / s,
+    (frameR.top - imgR.top) / s,
+    frameR.width / s,
+    frameR.height / s,
+    0, 0, canvas.width, canvas.height
+  );
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+  const done = crop.onDone;
+  closeCropper();
+  if (blob && done) done(blob);
+  else showToast('写真を読み込めませんでした');
+}
+
+function initCropper() {
+  const stage = cropEl('crop-stage');
+  stage.addEventListener('pointerdown', (e) => {
+    stage.setPointerCapture(e.pointerId);
+    crop.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  });
+  stage.addEventListener('pointermove', (e) => {
+    const p = crop.pointers.get(e.pointerId);
+    if (!p) return;
+    if (crop.pointers.size === 1) {
+      crop.tx += e.clientX - p.x;
+      crop.ty += e.clientY - p.y;
+    } else if (crop.pointers.size === 2) {
+      // ピンチ: もう1本の指との距離の変化率でスケール。中点を不動点にする
+      const other = [...crop.pointers.entries()].find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(p.x - other.x, p.y - other.y);
+      const d1 = Math.hypot(e.clientX - other.x, e.clientY - other.y);
+      if (d0 > 0 && d1 > 0) {
+        const r = d1 / d0;
+        const stageR = stage.getBoundingClientRect();
+        const mx = (e.clientX + other.x) / 2 - stageR.left;
+        const my = (e.clientY + other.y) / 2 - stageR.top;
+        crop.scale *= r;
+        crop.tx = mx - r * (mx - crop.tx);
+        crop.ty = my - r * (my - crop.ty);
+      }
+    }
+    p.x = e.clientX;
+    p.y = e.clientY;
+    cropApply();
+  });
+  const drop = (e) => crop.pointers.delete(e.pointerId);
+  stage.addEventListener('pointerup', drop);
+  stage.addEventListener('pointercancel', drop);
+  cropEl('crop-img').addEventListener('load', () => {
+    if (!cropEl('crop-veil').hidden) cropInitLayout();
+  });
+  cropEl('crop-cancel').addEventListener('click', closeCropper);
+  cropEl('crop-ok').addEventListener('click', cropConfirm);
 }
 
 // 既存データの一度きり整形: NDL並列タイトル・姓名間カンマの除去＋表紙URLのバックフィル（2026-07-22フィードバック対応）
@@ -473,7 +588,7 @@ async function cleanupLegacyData() {
     const author = (b.author || '').replace(/,\s*/g, ' ').trim();
     if (author !== b.author) { b.author = author; dirty = true; }
     if (!b.coverUrl && b.isbn) {
-      const url = await fetchCoverUrl(b.isbn);
+      const url = amazonCoverUrl(b.isbn);
       if (url) { b.coverUrl = url; dirty = true; }
     }
     if (dirty) { await updateBook(b); changed = true; }
@@ -516,21 +631,21 @@ export function initShelf() {
 
   const photoInput = document.getElementById('spine-photo-input');
   document.getElementById('spine-photo-btn').addEventListener('click', () => photoInput.click());
-  photoInput.addEventListener('change', async () => {
+  photoInput.addEventListener('change', () => {
     const file = photoInput.files[0];
     photoInput.value = '';
     if (!file || !detailBook) return;
-    try {
-      detailBook.spineImage = await resizeToBlob(file);
-    } catch {
-      showToast('写真を読み込めませんでした');
-      return;
-    }
-    await updateBook(detailBook);
-    renderPhotoButtons(detailBook);
-    render();
-    showToast('📷 背表紙写真を設定しました');
+    const { width, height } = spineStyle(detailBook);
+    openCropper(file, { w: width, h: height }, async (blob) => {
+      if (!detailBook) return;
+      detailBook.spineImage = blob;
+      await updateBook(detailBook);
+      renderPhotoButtons(detailBook);
+      render();
+      showToast('📷 背表紙写真を設定しました');
+    });
   });
+  initCropper();
   document.getElementById('spine-photo-del').addEventListener('click', async () => {
     if (!detailBook) return;
     detailBook.spineImage = null;
