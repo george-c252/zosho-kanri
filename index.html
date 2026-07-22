@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <!-- ?v= はキャッシュ更新用。デプロイ時に日付を上げる（M3のsw.jsで正式なバージョン管理に移行） -->
-  <link rel="stylesheet" href="css/style.css?v=20260722-4">
+  <link rel="stylesheet" href="css/style.css?v=20260722-5">
 </head>
 <body>
   <main>
@@ -90,13 +90,17 @@
           </dl>
         </div>
       </div>
-      <!-- 読書アクション（design_spec.json: reading=振ってしおり飛ばし／それ以外=読みはじめる・読了にする） -->
+      <!-- 読書アクション。しおり飛ばしはボタンなしの隠しコマンド（表紙を長押し→左右に擦る） -->
       <div class="status-actions">
         <button id="act-start" class="status-btn" type="button" hidden>📖 読みはじめる</button>
         <button id="act-finish" class="status-btn" type="button" hidden>読了にする</button>
-        <button id="act-shake" class="shake-btn" type="button" hidden>🔖 スマホを振ってしおりを飛ばす</button>
       </div>
-      <p id="shake-hint" hidden>読みかけの本 — 実機なら本体を振ってもOK</p>
+      <!-- 背表紙の実物写真（3段フォールバックの①） -->
+      <div class="photo-actions">
+        <button id="spine-photo-btn" class="status-btn" type="button">📷 背表紙写真を設定</button>
+        <button id="spine-photo-del" class="status-btn" type="button" hidden>写真を削除</button>
+        <input id="spine-photo-input" type="file" accept="image/*" hidden>
+      </div>
       <div class="sheet-actions">
         <button id="detail-delete" class="delete-btn" type="button">この本を削除</button>
       </div>
@@ -114,6 +118,6 @@
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>
-  <script type="module" src="js/main.js?v=20260722-4"></script>
+  <script type="module" src="js/main.js?v=20260722-5"></script>
 </body>
 </html>

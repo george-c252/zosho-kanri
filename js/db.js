@@ -59,6 +59,7 @@ export function createBook(partial) {
     author: partial.author || '',
     publisher: partial.publisher || '',
     coverUrl: partial.coverUrl || '',
+    spineImage: partial.spineImage ?? null, // 実物背表紙写真（Blob・3段フォールバックの①）
     format,
     status: 'unread',
     series: partial.series || '',
