@@ -8,6 +8,27 @@ const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 // データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
 const STATUS_LABEL = { unread: '未読', reading: '読書中', finished: '読了' };
 
+// 「僕(モブ)」のような漢字直後の（かな）を振り仮名として<ruby>で表示する。
+// innerHTMLは使わずDOM組み立てで挿入（XSS対策・仕様§9）。データ上のタイトルは変えない
+const RUBY_RE = /([一-鿿々〆]+)[（(]([ぁ-ゖァ-ヺー]+)[）)]/g;
+
+export function setTitleWithRuby(el, title) {
+  const text = title || '';
+  el.replaceChildren();
+  let last = 0;
+  for (const m of text.matchAll(RUBY_RE)) {
+    if (m.index > last) el.append(text.slice(last, m.index));
+    const ruby = document.createElement('ruby');
+    ruby.append(m[1]);
+    const rt = document.createElement('rt');
+    rt.textContent = m[2];
+    ruby.append(rt);
+    el.append(ruby);
+    last = m.index + m[0].length;
+  }
+  el.append(text.slice(last));
+}
+
 // 背表紙パレット（プロトタイプ本棚.dc.htmlのSPINES 16色を移植）。
 // 3段フォールバックの③: タイトルhashで割当。①撮影写真②表紙色抽出はM4以降 — 仕様§6.1
 const SPINE_PALETTE = [
@@ -109,11 +130,12 @@ async function setStatusAndSave(status, message) {
   showToast(message);
 }
 
-// しおりが左上へ舞い上がって消える（hondanaBookmark 1s）→ 読了にする
+// しおりが左上へ舞い上がって消える（hondanaBookmark 1s）→ その本を読了にする
+// 本棚の背表紙からも詳細シートの表紙からも発火するため、対象bookを引数で受ける
 let bookmarkFlying = false;
 
-function flyBookmark() {
-  if (bookmarkFlying || !detailBook || detailBook.status !== 'reading') return;
+async function finishWithBookmark(book) {
+  if (bookmarkFlying || !book || book.status !== 'reading') return;
   bookmarkFlying = true;
   const ribbon = document.createElement('div');
   ribbon.className = 'bookmark-fly';
@@ -122,71 +144,85 @@ function flyBookmark() {
     ribbon.remove();
     bookmarkFlying = false;
   });
-  setStatusAndSave('finished', '🔖 しおりを外して読了にしました');
+  book.status = 'finished';
+  await updateBook(book);
+  if (detailBook?.id === book.id) renderStatus(detailBook);
+  render();
+  showToast('🔖 しおりを外して読了にしました');
 }
 
-/* ---- 隠しコマンド: 表紙を長押しで掴み、左右に擦るとしおりが飛ぶ（実機フィードバック 2026-07-22） ---- */
+/* ---- 隠しコマンド: 本を長押しで掴み、左右に擦るとしおりが飛ぶ（実機フィードバック 2026-07-22）
+   本棚の背表紙・詳細シートの表紙の両方に仕込む ---- */
 
 const GRAB_MS = 350;      // 長押しでつかむまでの時間
 const RUB_SWING_PX = 16;  // 1振りとみなす最小往復幅
 const RUB_COUNT = 3;      // この回数折り返したら発火
 
-let grabTimer = null;
-let grabbed = false;
-let rubDir = 0;
-let rubExtremeX = 0; // 現在の振り方向の折り返し基準点
-let rubCount = 0;
+// 掴んだ後のpointerupで背表紙のclick（詳細を開く）が発火しないように抑止するフラグ
+let suppressNextClick = false;
 
-function releaseGrab(slot) {
-  clearTimeout(grabTimer);
-  grabTimer = null;
-  grabbed = false;
-  slot.classList.remove('grabbed');
-}
+function attachGrabGesture(el, getBook) {
+  let timer = null;
+  let isGrabbed = false;
+  let dir = 0;
+  let extremeX = 0; // 現在の振り方向の折り返し基準点
+  let startX = 0;
+  let count = 0;
 
-function initGrabGesture() {
-  const slot = document.getElementById('detail-cover-slot');
-  slot.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押しメニュー抑止
-  slot.addEventListener('pointerdown', (e) => {
-    if (!detailBook) return;
-    rubDir = 0;
-    rubCount = 0;
-    rubExtremeX = e.clientX;
-    slot.setPointerCapture(e.pointerId);
-    grabTimer = setTimeout(() => {
-      grabbed = true;
-      slot.classList.add('grabbed');
+  const release = () => {
+    clearTimeout(timer);
+    timer = null;
+    if (isGrabbed) {
+      isGrabbed = false;
+      el.classList.remove('grabbed');
+    }
+  };
+
+  el.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押しメニュー・テキスト選択の抑止
+  el.addEventListener('pointerdown', (e) => {
+    if (!getBook()) return;
+    startX = extremeX = e.clientX;
+    dir = 0;
+    count = 0;
+    el.setPointerCapture(e.pointerId);
+    timer = setTimeout(() => {
+      isGrabbed = true;
+      el.classList.add('grabbed');
       if (navigator.vibrate) navigator.vibrate(30);
     }, GRAB_MS);
   });
-  slot.addEventListener('pointermove', (e) => {
-    if (!grabbed) {
+  el.addEventListener('pointermove', (e) => {
+    if (!isGrabbed) {
       // つかむ前に大きく動いたらキャンセル（タップ・スクロールとの誤爆防止）
-      if (grabTimer && Math.abs(e.clientX - rubExtremeX) > 12) releaseGrab(slot);
+      if (timer && Math.abs(e.clientX - startX) > 12) release();
       return;
     }
-    const delta = e.clientX - rubExtremeX;
-    if (rubDir === 0) {
+    const delta = e.clientX - extremeX;
+    if (dir === 0) {
       if (Math.abs(delta) >= RUB_SWING_PX) {
-        rubDir = Math.sign(delta);
-        rubExtremeX = e.clientX;
+        dir = Math.sign(delta);
+        extremeX = e.clientX;
       }
       return;
     }
-    if (Math.sign(delta) === rubDir) {
-      rubExtremeX = e.clientX; // 同方向は折り返し基準点を更新するだけ
+    if (Math.sign(delta) === dir) {
+      extremeX = e.clientX; // 同方向は折り返し基準点を更新するだけ
     } else if (Math.abs(delta) >= RUB_SWING_PX) {
-      rubDir = -rubDir;
-      rubExtremeX = e.clientX;
-      rubCount += 1;
-      if (rubCount >= RUB_COUNT) {
-        releaseGrab(slot);
-        flyBookmark(); // 読書中でなければ何も起きない（隠しコマンド）
+      dir = -dir;
+      extremeX = e.clientX;
+      count += 1;
+      if (count >= RUB_COUNT) {
+        release();
+        suppressNextClick = true;
+        finishWithBookmark(getBook()); // 読書中でなければ何も起きない（隠しコマンド）
       }
     }
   });
-  slot.addEventListener('pointerup', () => releaseGrab(slot));
-  slot.addEventListener('pointercancel', () => releaseGrab(slot));
+  el.addEventListener('pointerup', () => {
+    if (isGrabbed) suppressNextClick = true; // 掴んだだけで離した時も詳細は開かない
+    release();
+  });
+  el.addEventListener('pointercancel', release);
 }
 
 // 振り検知（design_spec.json: 加速度合計>32・1.2sデバウンス）。
@@ -203,7 +239,7 @@ function onDeviceMotion(e) {
   const now = Date.now();
   if (total > SHAKE_THRESHOLD && now - lastShakeAt > SHAKE_DEBOUNCE_MS) {
     lastShakeAt = now;
-    flyBookmark();
+    finishWithBookmark(detailBook);
   }
 }
 
@@ -216,7 +252,7 @@ function buildCoverPh(book) {
   ph.style.color = color.fg;
   const phTitle = document.createElement('div');
   phTitle.className = 'ph-title';
-  phTitle.textContent = book.title || '（タイトル不明）';
+  setTitleWithRuby(phTitle, book.title || '（タイトル不明）');
   const phAuthor = document.createElement('div');
   phAuthor.className = 'ph-author';
   phAuthor.textContent = book.author || '';
@@ -239,7 +275,7 @@ function openDetail(book) {
   } else {
     slot.appendChild(buildCoverPh(book));
   }
-  document.getElementById('detail-title').textContent = book.title || '（タイトル不明）';
+  setTitleWithRuby(document.getElementById('detail-title'), book.title || '（タイトル不明）');
   document.getElementById('detail-author').textContent = book.author || '';
   document.getElementById('detail-publisher').textContent = book.publisher || '—';
   document.getElementById('detail-format').textContent = FORMAT_LABEL[book.format] || book.format;
@@ -293,7 +329,7 @@ function renderSpine(book) {
     btn.style.color = color.fg;
     const title = document.createElement('span');
     title.className = 'spine-title';
-    title.textContent = book.title || '（不明）';
+    setTitleWithRuby(title, book.title || '（不明）');
     const author = document.createElement('span');
     author.className = 'spine-author';
     author.textContent = book.author || '';
@@ -305,7 +341,14 @@ function renderSpine(book) {
     ribbon.className = 'spine-ribbon';
     btn.appendChild(ribbon);
   }
-  btn.addEventListener('click', () => openDetail(book));
+  attachGrabGesture(btn, () => book); // 隠しコマンド: 背表紙を長押しで掴んで左右に擦る
+  btn.addEventListener('click', () => {
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      return;
+    }
+    openDetail(book);
+  });
   return btn;
 }
 
@@ -357,7 +400,7 @@ function renderItem(book) {
   info.className = 'item-info';
   const title = document.createElement('p');
   title.className = 'item-title';
-  title.textContent = book.title || '（タイトル不明）';
+  setTitleWithRuby(title, book.title || '（タイトル不明）');
   const sub = document.createElement('p');
   sub.className = 'item-sub';
   sub.textContent = [book.author, FORMAT_LABEL[book.format] || book.format]
@@ -469,7 +512,7 @@ export function initShelf() {
   if (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function') {
     window.addEventListener('devicemotion', onDeviceMotion);
   }
-  initGrabGesture();
+  attachGrabGesture(document.getElementById('detail-cover-slot'), () => detailBook);
 
   const photoInput = document.getElementById('spine-photo-input');
   document.getElementById('spine-photo-btn').addEventListener('click', () => photoInput.click());

@@ -1,7 +1,7 @@
 import { createScanner, isValidBookIsbn } from './scanner.js';
 import { lookupIsbn } from './bookapi.js';
 import { createBook, addBook, checkDuplicate } from './db.js';
-import { initShelf, refreshShelf } from './views/shelf.js';
+import { initShelf, refreshShelf, setTitleWithRuby } from './views/shelf.js';
 
 const video = document.getElementById('viewfinder');
 const statusEl = document.getElementById('status');
@@ -45,7 +45,7 @@ function showDupBanner(dup) {
 
 // 書誌APIから取得した文字列は textContent で挿入する（XSS対策・仕様§9）
 function showBook(book) {
-  document.getElementById('book-title').textContent = book.title || '（書誌情報なし — 手入力で登録）';
+  setTitleWithRuby(document.getElementById('book-title'), book.title || '（書誌情報なし — 手入力で登録）');
   document.getElementById('book-author').textContent = book.author || '';
   document.getElementById('book-publisher').textContent = book.publisher || '';
   document.getElementById('book-isbn').textContent = `ISBN: ${book.isbn}`;
