@@ -104,6 +104,7 @@ async function register(format) {
 
 document.getElementById('reg-paper').addEventListener('click', () => register('paper'));
 document.getElementById('reg-ebook').addEventListener('click', () => register('ebook'));
+coverEl.addEventListener('error', () => { coverEl.hidden = true; }); // 表紙URL切れは非表示に
 
 manualForm.addEventListener('submit', (e) => {
   e.preventDefault();

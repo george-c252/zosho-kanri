@@ -46,6 +46,16 @@ async function lookupOpenBd(isbn) {
   };
 }
 
+// NDLの書誌はISBD由来の並列タイトル「ワールドトリガー = World trigger」形式で返ることがある → 「 = 」以降を除去
+export function stripParallelTitle(title) {
+  return (title || '').split(/\s+[=＝]\s+/)[0].trim();
+}
+
+// NDLの著者は「姓, 名」形式 → カンマを取り「姓 名」に
+function cleanNdlCreator(creator) {
+  return (creator || '').replace(/,\s*/g, ' ').trim();
+}
+
 const DC_NS = 'http://purl.org/dc/elements/1.1/';
 
 function dcText(item, tag) {
@@ -68,10 +78,10 @@ async function lookupNdl(isbn) {
   if (!title) return null;
   return {
     isbn,
-    title,
-    author: dcText(item, 'creator'),
+    title: stripParallelTitle(title),
+    author: cleanNdlCreator(dcText(item, 'creator')),
     publisher: dcText(item, 'publisher'),
-    coverUrl: '',
+    coverUrl: '', // NDLは表紙を返さない（サムネイルAPIは403）→ lookupIsbnでGoogle Booksから補完
     price: null,
     source: 'NDL',
   };
@@ -84,7 +94,7 @@ async function lookupGoogleBooks(isbn) {
   return {
     isbn,
     title: info.title,
-    author: (info.authors || []).join(', '),
+    author: (info.authors || []).join('・'),
     publisher: info.publisher || '',
     coverUrl: (info.imageLinks?.thumbnail || '').replace(/^http:/, 'https:'),
     price: null,
@@ -92,12 +102,19 @@ async function lookupGoogleBooks(isbn) {
   };
 }
 
+// 表紙URLだけを補完取得（NDLヒット時・既存データのバックフィル用）
+export async function fetchCoverUrl(isbn) {
+  const g = await lookupGoogleBooks(isbn);
+  return g?.coverUrl || '';
+}
+
 // 見つかれば {isbn, title, author, publisher, coverUrl, price, source}、全滅なら null
 // null の場合、呼び出し側はISBN確定状態の手入力フォームを開く（仕様§5.2）
 export async function lookupIsbn(isbn) {
-  return (
+  const hit =
     (await lookupOpenBd(isbn)) ??
     (await lookupNdl(isbn)) ??
-    (await lookupGoogleBooks(isbn))
-  );
+    (await lookupGoogleBooks(isbn));
+  if (hit && !hit.coverUrl) hit.coverUrl = await fetchCoverUrl(isbn);
+  return hit;
 }

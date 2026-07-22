@@ -2,6 +2,7 @@
 // デザインの正: design/design_spec.json（本棚=realistic、一覧=list）
 
 import { getAllBooks, deleteBook, updateBook } from '../db.js';
+import { stripParallelTitle, fetchCoverUrl } from '../bookapi.js';
 
 const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 // データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
@@ -90,9 +91,13 @@ function renderStatus(book) {
   pill.textContent = STATUS_LABEL[status] || status;
   pill.className = `status-pill status-${status}`;
   document.getElementById('act-start').hidden = status === 'reading';
-  document.getElementById('act-finish').hidden = status !== 'unread';
-  document.getElementById('act-shake').hidden = status !== 'reading';
-  document.getElementById('shake-hint').hidden = status !== 'reading';
+  document.getElementById('act-finish').hidden = status === 'finished';
+}
+
+function renderPhotoButtons(book) {
+  document.getElementById('spine-photo-btn').textContent =
+    book.spineImage ? '📷 背表紙写真を変更' : '📷 背表紙写真を設定';
+  document.getElementById('spine-photo-del').hidden = !book.spineImage;
 }
 
 async function setStatusAndSave(status, message) {
@@ -120,8 +125,72 @@ function flyBookmark() {
   setStatusAndSave('finished', '🔖 しおりを外して読了にしました');
 }
 
+/* ---- 隠しコマンド: 表紙を長押しで掴み、左右に擦るとしおりが飛ぶ（実機フィードバック 2026-07-22） ---- */
+
+const GRAB_MS = 350;      // 長押しでつかむまでの時間
+const RUB_SWING_PX = 16;  // 1振りとみなす最小往復幅
+const RUB_COUNT = 3;      // この回数折り返したら発火
+
+let grabTimer = null;
+let grabbed = false;
+let rubDir = 0;
+let rubExtremeX = 0; // 現在の振り方向の折り返し基準点
+let rubCount = 0;
+
+function releaseGrab(slot) {
+  clearTimeout(grabTimer);
+  grabTimer = null;
+  grabbed = false;
+  slot.classList.remove('grabbed');
+}
+
+function initGrabGesture() {
+  const slot = document.getElementById('detail-cover-slot');
+  slot.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押しメニュー抑止
+  slot.addEventListener('pointerdown', (e) => {
+    if (!detailBook) return;
+    rubDir = 0;
+    rubCount = 0;
+    rubExtremeX = e.clientX;
+    slot.setPointerCapture(e.pointerId);
+    grabTimer = setTimeout(() => {
+      grabbed = true;
+      slot.classList.add('grabbed');
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, GRAB_MS);
+  });
+  slot.addEventListener('pointermove', (e) => {
+    if (!grabbed) {
+      // つかむ前に大きく動いたらキャンセル（タップ・スクロールとの誤爆防止）
+      if (grabTimer && Math.abs(e.clientX - rubExtremeX) > 12) releaseGrab(slot);
+      return;
+    }
+    const delta = e.clientX - rubExtremeX;
+    if (rubDir === 0) {
+      if (Math.abs(delta) >= RUB_SWING_PX) {
+        rubDir = Math.sign(delta);
+        rubExtremeX = e.clientX;
+      }
+      return;
+    }
+    if (Math.sign(delta) === rubDir) {
+      rubExtremeX = e.clientX; // 同方向は折り返し基準点を更新するだけ
+    } else if (Math.abs(delta) >= RUB_SWING_PX) {
+      rubDir = -rubDir;
+      rubExtremeX = e.clientX;
+      rubCount += 1;
+      if (rubCount >= RUB_COUNT) {
+        releaseGrab(slot);
+        flyBookmark(); // 読書中でなければ何も起きない（隠しコマンド）
+      }
+    }
+  });
+  slot.addEventListener('pointerup', () => releaseGrab(slot));
+  slot.addEventListener('pointercancel', () => releaseGrab(slot));
+}
+
 // 振り検知（design_spec.json: 加速度合計>32・1.2sデバウンス）。
-// iOSは DeviceMotionEvent.requestPermission が必要なため対象外（ボタンタップで代替可）
+// iOSは DeviceMotionEvent.requestPermission が必要なため対象外
 const SHAKE_THRESHOLD = 32;
 const SHAKE_DEBOUNCE_MS = 1200;
 let lastShakeAt = 0;
@@ -138,6 +207,23 @@ function onDeviceMotion(e) {
   }
 }
 
+// プロトタイプのcoverStyle: 背表紙色グラデ＋書名上・著者下（背の帯とハイライトはCSSの::before/::after）
+function buildCoverPh(book) {
+  const ph = document.createElement('div');
+  ph.className = 'detail-cover-ph';
+  const { color } = spineStyle(book);
+  ph.style.background = `linear-gradient(150deg, ${color.bg}, ${color.bg} 60%, rgba(0,0,0,.25))`;
+  ph.style.color = color.fg;
+  const phTitle = document.createElement('div');
+  phTitle.className = 'ph-title';
+  phTitle.textContent = book.title || '（タイトル不明）';
+  const phAuthor = document.createElement('div');
+  phAuthor.className = 'ph-author';
+  phAuthor.textContent = book.author || '';
+  ph.append(phTitle, phAuthor);
+  return ph;
+}
+
 function openDetail(book) {
   detailBook = book;
   const slot = document.getElementById('detail-cover-slot');
@@ -147,22 +233,11 @@ function openDetail(book) {
     img.id = 'detail-cover';
     img.src = book.coverUrl;
     img.alt = '';
+    img.draggable = false;
+    img.addEventListener('error', () => img.replaceWith(buildCoverPh(book))); // 表紙URL切れはプレースホルダーに戻す
     slot.appendChild(img);
   } else {
-    // プロトタイプのcoverStyle: 背表紙色グラデ＋書名上・著者下（背の帯とハイライトはCSSの::before/::after）
-    const ph = document.createElement('div');
-    ph.className = 'detail-cover-ph';
-    const { color } = spineStyle(book);
-    ph.style.background = `linear-gradient(150deg, ${color.bg}, ${color.bg} 60%, rgba(0,0,0,.25))`;
-    ph.style.color = color.fg;
-    const phTitle = document.createElement('div');
-    phTitle.className = 'ph-title';
-    phTitle.textContent = book.title || '（タイトル不明）';
-    const phAuthor = document.createElement('div');
-    phAuthor.className = 'ph-author';
-    phAuthor.textContent = book.author || '';
-    ph.append(phTitle, phAuthor);
-    slot.appendChild(ph);
+    slot.appendChild(buildCoverPh(book));
   }
   document.getElementById('detail-title').textContent = book.title || '（タイトル不明）';
   document.getElementById('detail-author').textContent = book.author || '';
@@ -171,6 +246,7 @@ function openDetail(book) {
   document.getElementById('detail-isbn').textContent = book.isbn || '—';
   document.getElementById('detail-added').textContent = new Date(book.addedAt).toLocaleDateString('ja-JP');
   renderStatus(book);
+  renderPhotoButtons(book);
   veil().classList.add('open');
 }
 
@@ -189,6 +265,18 @@ async function deleteCurrent() {
 
 /* ---- 本棚（realistic）ビュー ---- */
 
+// BlobのobjectURLキャッシュ（renderのたびにcreateObjectURLでリークしないように）
+const spineUrlCache = new Map();
+
+function spineImageUrl(book) {
+  const cached = spineUrlCache.get(book.id);
+  if (cached?.blob === book.spineImage) return cached.url;
+  if (cached) URL.revokeObjectURL(cached.url);
+  const url = URL.createObjectURL(book.spineImage);
+  spineUrlCache.set(book.id, { blob: book.spineImage, url });
+  return url;
+}
+
 // 書誌データは textContent で挿入する（XSS対策・仕様§9）
 function renderSpine(book) {
   const btn = document.createElement('button');
@@ -197,16 +285,20 @@ function renderSpine(book) {
   const { color, height, width } = spineStyle(book);
   btn.style.height = `${height}px`;
   btn.style.width = `${width}px`;
-  btn.style.background = `linear-gradient(90deg, rgba(255,255,255,.18), rgba(0,0,0,.14) 60%), ${color.bg}`;
-  btn.style.color = color.fg;
-
-  const title = document.createElement('span');
-  title.className = 'spine-title';
-  title.textContent = book.title || '（不明）';
-  const author = document.createElement('span');
-  author.className = 'spine-author';
-  author.textContent = book.author || '';
-  btn.append(title, author);
+  if (book.spineImage) {
+    // 実物写真スピン（3段フォールバックの①）。写真に書名が写っているため文字は重ねない
+    btn.style.background = `url("${spineImageUrl(book)}") center / cover no-repeat`;
+  } else {
+    btn.style.background = `linear-gradient(90deg, rgba(255,255,255,.18), rgba(0,0,0,.14) 60%), ${color.bg}`;
+    btn.style.color = color.fg;
+    const title = document.createElement('span');
+    title.className = 'spine-title';
+    title.textContent = book.title || '（不明）';
+    const author = document.createElement('span');
+    author.className = 'spine-author';
+    author.textContent = book.author || '';
+    btn.append(title, author);
+  }
   // 読書中は上端に朱色しおりリボン（揺れアニメ hondanaRibbon — design_spec.json）
   if (book.status === 'reading') {
     const ribbon = document.createElement('span');
@@ -247,6 +339,12 @@ function renderItem(book) {
     img.src = book.coverUrl;
     img.alt = '';
     img.loading = 'lazy';
+    img.addEventListener('error', () => {
+      const ph = document.createElement('div');
+      ph.className = 'cover-placeholder';
+      ph.textContent = '📖';
+      img.replaceWith(ph);
+    });
     li.appendChild(img);
   } else {
     const ph = document.createElement('div');
@@ -308,6 +406,38 @@ export async function refreshShelf() {
   render();
 }
 
+// 背表紙写真は表示幅が小さいためJPEG縮小して保存（IndexedDB肥大防止）
+async function resizeToBlob(file, maxH = 480) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, maxH / bmp.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.85));
+}
+
+// 既存データの一度きり整形: NDL並列タイトル・姓名間カンマの除去＋表紙URLのバックフィル（2026-07-22フィードバック対応）
+async function cleanupLegacyData() {
+  const all = await getAllBooks();
+  let changed = false;
+  for (const b of all) {
+    let dirty = false;
+    const title = stripParallelTitle(b.title);
+    if (title && title !== b.title) { b.title = title; dirty = true; }
+    const author = (b.author || '').replace(/,\s*/g, ' ').trim();
+    if (author !== b.author) { b.author = author; dirty = true; }
+    if (!b.coverUrl && b.isbn) {
+      const url = await fetchCoverUrl(b.isbn);
+      if (url) { b.coverUrl = url; dirty = true; }
+    }
+    if (dirty) { await updateBook(b); changed = true; }
+  }
+  if (changed) await refreshShelf();
+}
+
 export function initShelf() {
   listEl = document.getElementById('book-list');
   countEl = document.getElementById('shelf-count');
@@ -336,10 +466,37 @@ export function initShelf() {
     setStatusAndSave('reading', '📖 読みはじめました。しおりを挟みました'));
   document.getElementById('act-finish').addEventListener('click', () =>
     setStatusAndSave('finished', '読了にしました'));
-  document.getElementById('act-shake').addEventListener('click', flyBookmark);
   if (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function') {
     window.addEventListener('devicemotion', onDeviceMotion);
   }
+  initGrabGesture();
 
+  const photoInput = document.getElementById('spine-photo-input');
+  document.getElementById('spine-photo-btn').addEventListener('click', () => photoInput.click());
+  photoInput.addEventListener('change', async () => {
+    const file = photoInput.files[0];
+    photoInput.value = '';
+    if (!file || !detailBook) return;
+    try {
+      detailBook.spineImage = await resizeToBlob(file);
+    } catch {
+      showToast('写真を読み込めませんでした');
+      return;
+    }
+    await updateBook(detailBook);
+    renderPhotoButtons(detailBook);
+    render();
+    showToast('📷 背表紙写真を設定しました');
+  });
+  document.getElementById('spine-photo-del').addEventListener('click', async () => {
+    if (!detailBook) return;
+    detailBook.spineImage = null;
+    await updateBook(detailBook);
+    renderPhotoButtons(detailBook);
+    render();
+    showToast('背表紙写真を削除しました');
+  });
+
+  cleanupLegacyData(); // 完了を待たない（終わったら本棚を再描画する）
   return refreshShelf();
 }
