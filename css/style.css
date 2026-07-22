@@ -1,4 +1,5 @@
-/* デザインの正: design/design_spec.json（2026-07-22採用・木目×明朝）
+/* デザインの正: design/design_spec_v2.json（2026-07-22更新・木目×明朝）
+   criticalCSS（木目背景・棚・グラス面）は v2 からの逐語コピー。要約・簡略化しないこと
    フォントはGoogle Fonts参照。M3のPWA化でセルフホスト化を検討（dev_log 2026-07-22） */
 
 :root {
@@ -29,8 +30,20 @@
 body {
   margin: 0;
   font-family: var(--sans);
-  background: var(--wood-base) fixed;
+  /* criticalCSS: woodBackground_木目背景（逐語） */
+  background: radial-gradient(60% 40% at 22% 12%, rgba(120,88,50,.18), transparent 60%), radial-gradient(50% 30% at 78% 62%, rgba(120,88,50,.14), transparent 60%), repeating-linear-gradient(92deg, rgba(150,112,66,.10) 0 2px, rgba(214,181,133,0) 2px 7px), repeating-linear-gradient(90deg, rgba(120,86,46,.05) 0 1px, transparent 1px 5px), linear-gradient(180deg, #e3caa0, #d3b485 55%, #c8a877);
+  background-attachment: fixed;
   color: var(--text-ink);
+}
+
+/* criticalCSS: woodVignette_周囲の陰影（木目の上に重ねる全面レイヤー） */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  box-shadow: inset 0 0 90px rgba(80, 52, 20, .35);
 }
 
 main {
@@ -100,13 +113,15 @@ main {
   flex-direction: column;
 }
 
+/* criticalCSS: shelfRecess_棚の奧行き */
 .shelf-row {
   display: flex;
   align-items: flex-end;
   gap: 3px;
-  padding: 12px 10px 0;
+  padding: 10px 10px 0;
   background: var(--wood-recess);
-  border-radius: 6px 6px 0 0;
+  border-radius: 7px 7px 0 0;
+  box-shadow: inset 0 8px 16px rgba(60, 38, 12, .4), inset 0 0 0 1px rgba(90, 60, 26, .25);
   overflow-x: auto;
   scrollbar-width: none;
   min-height: 200px;
@@ -116,10 +131,11 @@ main {
   display: none;
 }
 
+/* criticalCSS: shelfPlank_棚板 */
 .shelf-plank {
-  height: 12px;
+  height: 15px;
   background: var(--wood-plank);
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 5px 5px;
   box-shadow: var(--shadow-plank);
   margin-bottom: 14px;
 }
@@ -143,7 +159,8 @@ main {
   align-items: center;
   justify-content: space-between;
   font-family: var(--serif);
-  box-shadow: inset 2px 0 3px rgba(0, 0, 0, .28), inset -1px 0 2px rgba(255, 255, 255, .25), 2px 3px 6px rgba(40, 26, 10, .35);
+  /* criticalCSS: spine_背表紙（左端に暗い影・右にハイライト） */
+  box-shadow: -1px 0 2px rgba(0, 0, 0, .25), inset 1px 0 1px rgba(255, 255, 255, .15);
   position: relative;
 }
 
@@ -424,15 +441,16 @@ input::placeholder {
   display: flex;
 }
 
+/* criticalCSS: glassSheet_ボトムシート */
 #detail-sheet {
   position: relative;
   width: min(480px, 100%);
-  border-radius: 30px 30px 0 0;
+  border-radius: 30px 30px 42px 42px;
   background: var(--glass-surface);
   backdrop-filter: blur(30px) saturate(1.5);
   -webkit-backdrop-filter: blur(30px) saturate(1.5);
-  border: var(--glass-border);
-  border-bottom: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, .7);
   box-shadow: var(--shadow-sheet);
   padding: 14px 22px calc(env(safe-area-inset-bottom, 0px) + 26px);
   animation: hondanaPop .34s cubic-bezier(.2, .9, .3, 1);
@@ -598,6 +616,7 @@ input::placeholder {
 }
 
 /* ---- フローティングドック ---- */
+/* criticalCSS: glassDock_ドック */
 #tabbar {
   position: fixed;
   left: 50%;
@@ -609,10 +628,10 @@ input::placeholder {
   align-items: center;
   padding: 8px;
   border-radius: 30px;
-  background: var(--glass-surface);
+  background: var(--glass-surface-light);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: var(--glass-border);
+  border: 1px solid rgba(255, 255, 255, .55);
   box-shadow: var(--shadow-dock), 0 1px 0 rgba(255, 255, 255, .6) inset;
 }
 
