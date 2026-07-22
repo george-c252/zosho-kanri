@@ -1,9 +1,11 @@
 // 蔵書一覧（本棚/一覧の2ビュー）・検索・削除・詳細シート
 // デザインの正: design/design_spec.json（本棚=realistic、一覧=list）
 
-import { getAllBooks, deleteBook } from '../db.js';
+import { getAllBooks, deleteBook, updateBook } from '../db.js';
 
 const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
+// データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
+const STATUS_LABEL = { unread: '未読', reading: '読書中', finished: '読了' };
 
 // 背表紙パレット（design_spec.jsonの世界観に合わせた落ち着いた和色。
 // 3段フォールバックの③: タイトルhashで割当。①撮影写真②表紙色抽出はM4以降 — 仕様§6.1）
@@ -59,10 +61,77 @@ function matches(book, query) {
   );
 }
 
+/* ---- トースト（design_spec.json: hondanaToast 2.4s） ---- */
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.hidden = false;
+  // アニメーションを先頭から再生し直すためクラスを付け直す
+  toast.classList.remove('show');
+  void toast.offsetWidth;
+  toast.classList.add('show');
+}
+
 /* ---- 詳細ボトムシート ---- */
 
 const veil = () => document.getElementById('detail-veil');
 let detailBook = null;
+
+// 読書ステータスに応じてピルとアクションボタンを出し分ける
+// （design_spec.json: reading=振ってしおり飛ばし／それ以外=読みはじめる・読了にする）
+function renderStatus(book) {
+  const status = book.status || 'unread';
+  const pill = document.getElementById('detail-status');
+  pill.textContent = STATUS_LABEL[status] || status;
+  pill.className = `status-pill status-${status}`;
+  document.getElementById('act-start').hidden = status === 'reading';
+  document.getElementById('act-finish').hidden = status !== 'unread';
+  document.getElementById('act-shake').hidden = status !== 'reading';
+}
+
+async function setStatusAndSave(status, message) {
+  if (!detailBook) return;
+  detailBook.status = status;
+  await updateBook(detailBook);
+  renderStatus(detailBook);
+  render(); // 本棚のしおりリボン表示を同期
+  showToast(message);
+}
+
+// しおりが左上へ舞い上がって消える（hondanaBookmark 1s）→ 読了にする
+let bookmarkFlying = false;
+
+function flyBookmark() {
+  if (bookmarkFlying || !detailBook || detailBook.status !== 'reading') return;
+  bookmarkFlying = true;
+  const ribbon = document.createElement('div');
+  ribbon.className = 'bookmark-fly';
+  document.body.appendChild(ribbon);
+  ribbon.addEventListener('animationend', () => {
+    ribbon.remove();
+    bookmarkFlying = false;
+  });
+  setStatusAndSave('finished', '🔖 しおりを外して読了にしました');
+}
+
+// 振り検知（design_spec.json: 加速度合計>32・1.2sデバウンス）。
+// iOSは DeviceMotionEvent.requestPermission が必要なため対象外（ボタンタップで代替可）
+const SHAKE_THRESHOLD = 32;
+const SHAKE_DEBOUNCE_MS = 1200;
+let lastShakeAt = 0;
+
+function onDeviceMotion(e) {
+  if (!veil().classList.contains('open')) return;
+  const a = e.accelerationIncludingGravity;
+  if (!a) return;
+  const total = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
+  const now = Date.now();
+  if (total > SHAKE_THRESHOLD && now - lastShakeAt > SHAKE_DEBOUNCE_MS) {
+    lastShakeAt = now;
+    flyBookmark();
+  }
+}
 
 function openDetail(book) {
   detailBook = book;
@@ -89,6 +158,7 @@ function openDetail(book) {
   document.getElementById('detail-format').textContent = FORMAT_LABEL[book.format] || book.format;
   document.getElementById('detail-isbn').textContent = book.isbn || '—';
   document.getElementById('detail-added').textContent = new Date(book.addedAt).toLocaleDateString('ja-JP');
+  renderStatus(book);
   veil().classList.add('open');
 }
 
@@ -125,6 +195,12 @@ function renderSpine(book) {
   author.className = 'spine-author';
   author.textContent = book.author || '';
   btn.append(title, author);
+  // 読書中は上端に朱色しおりリボン（揺れアニメ hondanaRibbon — design_spec.json）
+  if (book.status === 'reading') {
+    const ribbon = document.createElement('span');
+    ribbon.className = 'spine-ribbon';
+    btn.appendChild(ribbon);
+  }
   btn.addEventListener('click', () => openDetail(book));
   return btn;
 }
@@ -243,6 +319,15 @@ export function initShelf() {
     if (e.target === veilEl) closeDetail();
   });
   document.getElementById('detail-delete').addEventListener('click', deleteCurrent);
+
+  document.getElementById('act-start').addEventListener('click', () =>
+    setStatusAndSave('reading', '📖 読みはじめました。しおりを挟みました'));
+  document.getElementById('act-finish').addEventListener('click', () =>
+    setStatusAndSave('finished', '読了にしました'));
+  document.getElementById('act-shake').addEventListener('click', flyBookmark);
+  if (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function') {
+    window.addEventListener('devicemotion', onDeviceMotion);
+  }
 
   return refreshShelf();
 }

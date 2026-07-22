@@ -7,16 +7,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css">
+  <!-- ?v= はキャッシュ更新用。デプロイ時に日付を上げる（M3のsw.jsで正式なバージョン管理に移行） -->
+  <link rel="stylesheet" href="css/style.css?v=20260722-2">
 </head>
 <body>
   <main>
-    <!-- スキャン画面 -->
-    <section id="tab-scan" class="tab">
+    <!-- スキャン画面（カメラはこのタブを開いた時だけ起動する） -->
+    <section id="tab-scan" class="tab" hidden>
       <div class="screen-head">
         <h1>スキャン</h1>
       </div>
-      <p id="status">カメラ起動中…</p>
+      <p id="status"></p>
       <video id="viewfinder" autoplay muted playsinline></video>
       <form id="manual-form">
         <input id="manual-isbn" inputmode="numeric" maxlength="13" placeholder="ISBN手入力（978から13桁）">
@@ -46,7 +47,7 @@
     </section>
 
     <!-- 蔵書一覧画面（本棚/一覧の2ビュー切替。デザインの正: design/design_spec.json） -->
-    <section id="tab-shelf" class="tab" hidden>
+    <section id="tab-shelf" class="tab">
       <div class="screen-head">
         <h1>本棚<span class="count" id="shelf-head-count"></span></h1>
         <div id="view-toggle">
@@ -70,6 +71,7 @@
       <div class="sheet-body">
         <div id="detail-cover-slot"></div>
         <div class="sheet-info">
+          <p id="detail-status" class="status-pill"></p>
           <h2 id="detail-title"></h2>
           <p id="detail-author"></p>
           <dl class="detail-rows">
@@ -80,20 +82,29 @@
           </dl>
         </div>
       </div>
+      <!-- 読書アクション（design_spec.json: reading=振ってしおり飛ばし／それ以外=読みはじめる・読了にする） -->
+      <div class="status-actions">
+        <button id="act-start" class="status-btn" type="button" hidden>📖 読みはじめる</button>
+        <button id="act-finish" class="status-btn" type="button" hidden>読了にする</button>
+        <button id="act-shake" class="shake-btn" type="button" hidden>🔖 スマホを振ってしおりを飛ばす</button>
+      </div>
       <div class="sheet-actions">
         <button id="detail-delete" class="delete-btn" type="button">この本を削除</button>
       </div>
     </div>
   </div>
 
+  <!-- トースト（hondanaToast 2.4s） -->
+  <div id="toast" hidden></div>
+
   <nav id="tabbar">
-    <button data-tab="shelf" type="button">📚 本棚</button>
-    <button data-tab="scan" class="active" type="button">📷 スキャン</button>
+    <button data-tab="shelf" class="active" type="button">📚 本棚</button>
+    <button data-tab="scan" type="button">📷 スキャン</button>
   </nav>
 
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=20260722-2"></script>
 </body>
 </html>

@@ -116,29 +116,54 @@ manualForm.addEventListener('submit', (e) => {
   handleIsbn(isbn);
 });
 
-// タブ切替（スキャン／蔵書）。カメラは切替後も起動したままにする
+// カメラはスキャンタブを開いた時だけ起動し、離れたら停止する
+// （常時オンを嫌う実機フィードバック 2026-07-22。stop→再startのiOS互換は実機で要確認）
+const scanner = createScanner();
+let cameraOn = false;
+let cameraStarting = false;
+
+async function startCamera() {
+  if (cameraOn || cameraStarting) return;
+  if (!window.isSecureContext) {
+    setStatus('⚠️ HTTPSではないためカメラは使えません（仕様§10）。手入力での登録は可能です。');
+    return;
+  }
+  cameraStarting = true;
+  setStatus('カメラ起動中…');
+  try {
+    await scanner.start(video, handleIsbn);
+    cameraOn = true;
+    setStatus('カメラ起動済み — バーコードをかざしてください');
+  } catch (err) {
+    setStatus(`カメラを起動できません: ${err.name}。手入力での登録は可能です。`);
+  } finally {
+    cameraStarting = false;
+  }
+}
+
+function stopCamera() {
+  if (!cameraOn) return;
+  scanner.stop();
+  cameraOn = false;
+}
+
+// タブ切替（スキャン／蔵書）。デフォルトは蔵書タブ＝カメラオフ
 const tabs = { scan: document.getElementById('tab-scan'), shelf: document.getElementById('tab-shelf') };
 document.querySelectorAll('#tabbar button').forEach((btn) => {
   btn.addEventListener('click', () => {
     const name = btn.dataset.tab;
     for (const [key, el] of Object.entries(tabs)) el.hidden = key !== name;
     document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('active', b === btn));
+    if (name === 'scan') startCamera();
+    else stopCamera();
     if (name === 'shelf') refreshShelf();
   });
 });
 
-async function init() {
-  await initShelf();
-  if (!window.isSecureContext) {
-    setStatus('⚠️ HTTPSではないためカメラは使えません（仕様§10）。手入力での登録は可能です。');
-    return;
-  }
-  try {
-    await createScanner().start(video, handleIsbn);
-    setStatus('カメラ起動済み — バーコードをかざしてください');
-  } catch (err) {
-    setStatus(`カメラを起動できません: ${err.name}。手入力での登録は可能です。`);
-  }
-}
+// バックグラウンド移行時もカメラを止める（復帰時はスキャンタブ表示中なら再起動）
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopCamera();
+  else if (!tabs.scan.hidden) startCamera();
+});
 
-init();
+initShelf();
