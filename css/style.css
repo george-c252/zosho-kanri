@@ -27,6 +27,12 @@
   box-sizing: border-box;
 }
 
+/* hidden属性をdisplay指定（flex等）より必ず優先させる。
+   これが無いと #manual-book などhidden切替＋display指定の要素が常時表示になる（2026-07-22実機バグ） */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: var(--sans);
@@ -162,6 +168,11 @@ main {
   align-items: center;
   justify-content: flex-start;
   font-family: var(--serif);
+  /* 長押しで掴む隠しコマンド用: テキスト選択・ブラウザのパン操作を無効化 */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   /* criticalCSS: spine_背表紙（左端に暗い影・右にハイライト） */
   box-shadow: -1px 0 2px rgba(0, 0, 0, .25), inset 1px 0 1px rgba(255, 255, 255, .15);
   position: relative;
@@ -537,6 +548,17 @@ input::placeholder {
 #detail-cover-slot.grabbed > * {
   transform: scale(1.07) rotate(-3deg);
   box-shadow: 0 18px 34px -8px rgba(0, 0, 0, .55);
+}
+
+/* 背表紙を掴んだ時も浮き上がる */
+.spine {
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.spine.grabbed {
+  transform: translateY(-10px) scale(1.06) rotate(-2deg);
+  box-shadow: 0 18px 30px -8px rgba(0, 0, 0, .55);
+  z-index: 5;
 }
 
 #detail-cover-slot img {
