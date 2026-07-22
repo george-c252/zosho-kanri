@@ -70,12 +70,84 @@ function hashCode(str) {
 
 function spineStyle(book) {
   const h = hashCode(book.id || book.title || '');
-  const color = SPINE_PALETTE[h % SPINE_PALETTE.length];
+  // 3段フォールバックの②: 表紙から抽出した色があれば優先。無ければ③hash割当（仕様§6.1）
+  const color = book.spineColor || SPINE_PALETTE[h % SPINE_PALETTE.length];
   return {
     color,
     height: 152 + (h % 41),      // 152〜192px（design_spec.json）
     width: 27 + ((h >> 4) % 16), // 27〜42px
   };
+}
+
+// 表紙画像の縁ピクセルの最頻色を「表紙の背景色」として抽出する（Amazon書影はCORS許可ありを実測済み）
+function extractSpineColor(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        if (img.naturalWidth <= 1) return resolve(null); // Amazonの「画像なし1x1」
+        const w = 24;
+        const h = 36;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        const counts = new Map();
+        const pick = (x, y) => {
+          const i = (y * w + x) * 4;
+          const key = `${data[i] >> 4}_${data[i + 1] >> 4}_${data[i + 2] >> 4}`; // 16段階量子化で近い色をまとめる
+          const c = counts.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+          c.n += 1;
+          c.r += data[i];
+          c.g += data[i + 1];
+          c.b += data[i + 2];
+          counts.set(key, c);
+        };
+        // 縁2px分だけ数える（中央の絵柄でなく「背景」を拾うため）
+        for (let x = 0; x < w; x++) for (const y of [0, 1, h - 2, h - 1]) pick(x, y);
+        for (let y = 2; y < h - 2; y++) for (const x of [0, 1, w - 2, w - 1]) pick(x, y);
+        const best = [...counts.values()].sort((a, b) => b.n - a.n)[0];
+        const r = Math.round(best.r / best.n);
+        const g = Math.round(best.g / best.n);
+        const b = Math.round(best.b / best.n);
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        resolve({
+          bg: `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`,
+          fg: lum > 150 ? '#3a2a16' : '#f3ead6',
+        });
+      } catch {
+        resolve(null); // CORS不可でcanvasが汚染された場合など
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+// 表紙ありで色未抽出の本をまとめて抽出→保存（冪等・毎回の起動で残りを少しずつ処理）
+let extractingColors = false;
+
+async function ensureSpineColors() {
+  if (extractingColors) return;
+  extractingColors = true;
+  try {
+    let changed = false;
+    for (const b of await getAllBooks()) {
+      if (b.spineColor || !b.coverUrl) continue;
+      const color = await extractSpineColor(b.coverUrl);
+      if (color) {
+        b.spineColor = color;
+        await updateBook(b);
+        changed = true;
+      }
+    }
+    if (changed) await refreshShelf();
+  } finally {
+    extractingColors = false;
+  }
 }
 
 function matches(book, query) {
@@ -161,12 +233,13 @@ const RUB_COUNT = 3;      // この回数折り返したら発火
 // 掴んだ後のpointerupで背表紙のclick（詳細を開く）が発火しないように抑止するフラグ
 let suppressNextClick = false;
 
-function attachGrabGesture(el, getBook) {
+function attachGrabGesture(el, getBook, onDrop) {
   let timer = null;
   let isGrabbed = false;
   let dir = 0;
   let extremeX = 0; // 現在の振り方向の折り返し基準点
   let startX = 0;
+  let startY = 0;
   let count = 0;
 
   const release = () => {
@@ -183,6 +256,7 @@ function attachGrabGesture(el, getBook) {
   el.addEventListener('pointerdown', (e) => {
     if (!getBook()) return;
     startX = extremeX = e.clientX;
+    startY = e.clientY;
     dir = 0;
     count = 0;
     el.setPointerCapture(e.pointerId);
@@ -201,7 +275,7 @@ function attachGrabGesture(el, getBook) {
     }
     // 掴んだ本は指についてくる（左右の振りで少し傾く）
     el.style.transform =
-      `translate(${e.clientX - startX}px, -12px) scale(1.07) rotate(${dir * 5}deg)`;
+      `translate(${e.clientX - startX}px, ${e.clientY - startY - 12}px) scale(1.07) rotate(${dir * 5}deg)`;
     const delta = e.clientX - extremeX;
     if (dir === 0) {
       if (Math.abs(delta) >= RUB_SWING_PX) {
@@ -223,8 +297,11 @@ function attachGrabGesture(el, getBook) {
       }
     }
   });
-  el.addEventListener('pointerup', () => {
-    if (isGrabbed) suppressNextClick = true; // 掴んだだけで離した時も詳細は開かない
+  el.addEventListener('pointerup', (e) => {
+    if (isGrabbed) {
+      suppressNextClick = true; // 掴んだだけで離した時も詳細は開かない
+      if (onDrop) onDrop(getBook(), e.clientX, e.clientY); // ドロップ位置で並び替え
+    }
     release();
   });
   el.addEventListener('pointercancel', release);
@@ -327,6 +404,7 @@ function renderSpine(book) {
   const btn = document.createElement('button');
   btn.className = 'spine';
   btn.type = 'button';
+  btn.dataset.id = book.id; // 並び替えのドロップ位置判定用
   const { color, height, width } = spineStyle(book);
   btn.style.height = `${height}px`;
   btn.style.width = `${width}px`;
@@ -350,7 +428,7 @@ function renderSpine(book) {
     ribbon.className = 'spine-ribbon';
     btn.appendChild(ribbon);
   }
-  attachGrabGesture(btn, () => book); // 隠しコマンド: 背表紙を長押しで掴んで左右に擦る
+  attachGrabGesture(btn, () => book, reorderBook); // 長押しで掴む→擦ればしおり・運んでドロップで並び替え
   btn.addEventListener('click', () => {
     if (suppressNextClick) {
       suppressNextClick = false;
@@ -458,8 +536,50 @@ function render() {
 
 export async function refreshShelf() {
   books = await getAllBooks();
-  books.sort((a, b) => b.addedAt - a.addedAt); // 追加日の新しい順
+  // 手動並び順（ドラッグ&ドロップ）があれば優先。未割当（新規追加）は先頭に追加日の新しい順
+  books.sort((a, b) => {
+    const ao = a.shelfOrder ?? -1;
+    const bo = b.shelfOrder ?? -1;
+    if (ao !== bo) return ao - bo;
+    return b.addedAt - a.addedAt;
+  });
   render();
+  ensureSpineColors(); // 完了を待たない（抽出できたら再描画される）
+}
+
+// 掴んだ本をドロップ位置に並び替える（棚の行→行内の背表紙中心Xで挿入位置を決める）
+async function reorderBook(book, x, y) {
+  let newIndex = 0;
+  for (const row of realisticEl.querySelectorAll('.shelf-row')) {
+    const rowRect = row.getBoundingClientRect();
+    const spines = [...row.querySelectorAll('.spine')].filter((s) => s.dataset.id !== String(book.id));
+    if (rowRect.bottom < y) {
+      newIndex += spines.length; // ドロップ位置より上の行は全部前
+      continue;
+    }
+    if (rowRect.top > y) break; // ドロップ位置より下の行 → ここまでで確定
+    for (const s of spines) {
+      const r = s.getBoundingClientRect();
+      if (r.left + r.width / 2 < x) newIndex += 1;
+    }
+    break;
+  }
+  const oldIndex = books.findIndex((b) => b.id === book.id);
+  if (oldIndex < 0) return;
+  books.splice(oldIndex, 1);
+  books.splice(newIndex, 0, book);
+  let changed = false;
+  for (let i = 0; i < books.length; i++) {
+    if (books[i].shelfOrder !== i) {
+      books[i].shelfOrder = i;
+      await updateBook(books[i]);
+      changed = true;
+    }
+  }
+  if (changed) {
+    render();
+    showToast('並び替えました');
+  }
 }
 
 /* ---- 背表紙写真のトリミング（枠に合わせてドラッグ・2本指ピンチで調整） ---- */

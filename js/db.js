@@ -60,6 +60,8 @@ export function createBook(partial) {
     publisher: partial.publisher || '',
     coverUrl: partial.coverUrl || '',
     spineImage: partial.spineImage ?? null, // 実物背表紙写真（Blob・3段フォールバックの①）
+    spineColor: partial.spineColor ?? null, // 表紙から抽出した背景色 {bg, fg}（3段フォールバックの②）
+    shelfOrder: partial.shelfOrder ?? null, // 本棚の手動並び順（ドラッグ&ドロップで割当）
     format,
     status: 'unread',
     series: partial.series || '',
