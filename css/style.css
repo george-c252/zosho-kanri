@@ -169,6 +169,27 @@ main {
   white-space: nowrap;
 }
 
+/* 読書中の朱色しおりリボン（design_spec.json: 揺れアニメ hondanaRibbon 3.2s） */
+.spine-ribbon {
+  position: absolute;
+  top: -3px;
+  right: 5px;
+  width: 8px;
+  height: 24px;
+  background: linear-gradient(160deg, var(--accent), var(--accent-deep));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  box-shadow: 1px 2px 3px rgba(40, 26, 10, .35);
+  transform-origin: top center;
+  animation: hondanaRibbon 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hondanaRibbon {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(4deg); }
+  65% { transform: rotate(-3deg); }
+}
+
 /* ---- 一覧（リスト）ビュー ---- */
 #shelf-search {
   width: 100%;
@@ -423,7 +444,9 @@ input::placeholder {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #detail-sheet { animation: none; }
+  #detail-sheet, .spine-ribbon { animation: none; }
+  /* animation:none だと animationend が発火せず要素が残るため極短で完了させる */
+  .bookmark-fly { animation-duration: .01s; }
 }
 
 .sheet-handle {
@@ -471,6 +494,31 @@ input::placeholder {
   min-width: 0;
 }
 
+/* 読書ステータスピル（色は design_spec.json の status* トークン） */
+.status-pill {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status-unread {
+  background: rgba(120, 90, 50, .16);
+  color: #7a5a34;
+}
+
+.status-reading {
+  background: rgba(224, 85, 47, .16);
+  color: #b23a22;
+}
+
+.status-finished {
+  background: rgba(34, 160, 107, .16);
+  color: #1f7a52;
+}
+
 #detail-title {
   margin: 0 0 4px;
   font-family: var(--serif);
@@ -502,10 +550,44 @@ input::placeholder {
   overflow-wrap: anywhere;
 }
 
-.sheet-actions {
+/* 読書アクション */
+.status-actions {
   display: flex;
   gap: 10px;
   margin-top: 16px;
+}
+
+.status-btn {
+  flex: 1;
+  padding: 10px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 14px;
+  border: var(--glass-border);
+  background: rgba(255, 255, 255, .7);
+  color: var(--text-ink);
+  cursor: pointer;
+}
+
+/* 破線枠の遊び心ボタン（design_spec.json: detail.actions.reading） */
+.shake-btn {
+  flex: 1;
+  padding: 10px;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: 14px;
+  border: 2px dashed var(--accent);
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .sheet-actions .delete-btn {
@@ -555,4 +637,51 @@ input::placeholder {
   background: linear-gradient(160deg, var(--accent), var(--accent-deep));
   color: #fff;
   box-shadow: 0 6px 16px rgba(193, 56, 31, .4);
+}
+
+/* ---- 舞い上がるしおり（design_spec.json: hondanaBookmark 1s） ---- */
+.bookmark-fly {
+  position: fixed;
+  bottom: 190px;
+  left: 58%;
+  width: 22px;
+  height: 60px;
+  z-index: 60;
+  background: linear-gradient(160deg, var(--accent), var(--accent-deep));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  box-shadow: 2px 4px 10px rgba(40, 26, 10, .4);
+  animation: hondanaBookmark 1s cubic-bezier(.2, .7, .3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes hondanaBookmark {
+  from { transform: none; opacity: 1; }
+  to { transform: translate(-140px, -300px) rotate(-50deg); opacity: 0; }
+}
+
+/* ---- トースト（design_spec.json: hondanaToast 2.4s） ---- */
+#toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  z-index: 70;
+  padding: 10px 18px;
+  border-radius: 20px;
+  background: rgba(63, 45, 26, .92);
+  color: #f3ead6;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#toast.show {
+  animation: hondanaToast 2.4s ease forwards;
+}
+
+@keyframes hondanaToast {
+  0% { opacity: 0; transform: translate(-50%, 14px); }
+  12%, 82% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
 }
