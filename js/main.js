@@ -105,6 +105,9 @@ async function register(format) {
 document.getElementById('reg-paper').addEventListener('click', () => register('paper'));
 document.getElementById('reg-ebook').addEventListener('click', () => register('ebook'));
 coverEl.addEventListener('error', () => { coverEl.hidden = true; }); // 表紙URL切れは非表示に
+coverEl.addEventListener('load', () => {
+  if (coverEl.naturalWidth <= 1) coverEl.hidden = true; // Amazon書影の「画像なし1x1 GIF」対策
+});
 
 manualForm.addEventListener('submit', (e) => {
   e.preventDefault();

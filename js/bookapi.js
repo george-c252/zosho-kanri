@@ -102,10 +102,16 @@ async function lookupGoogleBooks(isbn) {
   };
 }
 
-// 表紙URLだけを補完取得（NDLヒット時・既存データのバックフィル用）
-export async function fetchCoverUrl(isbn) {
-  const g = await lookupGoogleBooks(isbn);
-  return g?.coverUrl || '';
+// Amazonの書影URL（ISBN-10ベース・キー不要）。openBDに書影が無い本（集英社等）の補完用。
+// Google Booksは匿名利用の日次クォータで429になるため使わない（2026-07-22実測）。
+// 画像が無いISBNは1x1 GIFが返るため、表示側で naturalWidth<=1 をプレースホルダー扱いにする
+export function amazonCoverUrl(isbn13) {
+  if (!/^978\d{10}$/.test(isbn13 || '')) return '';
+  const core = isbn13.slice(3, 12);
+  const sum = [...core].reduce((acc, d, i) => acc + Number(d) * (10 - i), 0);
+  const check = (11 - (sum % 11)) % 11;
+  const isbn10 = core + (check === 10 ? 'X' : String(check));
+  return `https://images-na.ssl-images-amazon.com/images/P/${isbn10}.09.LZZZZZZZ.jpg`;
 }
 
 // 見つかれば {isbn, title, author, publisher, coverUrl, price, source}、全滅なら null
@@ -115,6 +121,6 @@ export async function lookupIsbn(isbn) {
     (await lookupOpenBd(isbn)) ??
     (await lookupNdl(isbn)) ??
     (await lookupGoogleBooks(isbn));
-  if (hit && !hit.coverUrl) hit.coverUrl = await fetchCoverUrl(isbn);
+  if (hit && !hit.coverUrl) hit.coverUrl = amazonCoverUrl(isbn);
   return hit;
 }

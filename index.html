@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <!-- ?v= はキャッシュ更新用。デプロイ時に日付を上げる（M3のsw.jsで正式なバージョン管理に移行） -->
-  <link rel="stylesheet" href="css/style.css?v=20260722-6">
+  <link rel="stylesheet" href="css/style.css?v=20260722-7">
 </head>
 <body>
   <main>
@@ -107,6 +107,19 @@
     </div>
   </div>
 
+  <!-- 背表紙写真のトリミング（枠に合わせてドラッグ・2本指ピンチで調整） -->
+  <div id="crop-veil" hidden>
+    <p class="crop-hint">枠に背表紙を合わせてください（ドラッグで移動・2本指で拡大縮小）</p>
+    <div id="crop-stage">
+      <img id="crop-img" alt="">
+      <div id="crop-frame"></div>
+    </div>
+    <div class="crop-actions">
+      <button id="crop-cancel" type="button">キャンセル</button>
+      <button id="crop-ok" type="button">この範囲で設定</button>
+    </div>
+  </div>
+
   <!-- トースト（hondanaToast 2.4s） -->
   <div id="toast" hidden></div>
 
@@ -118,6 +131,6 @@
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>
-  <script type="module" src="js/main.js?v=20260722-6"></script>
+  <script type="module" src="js/main.js?v=20260722-7"></script>
 </body>
 </html>
