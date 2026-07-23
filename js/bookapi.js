@@ -38,7 +38,7 @@ async function lookupOpenBd(isbn) {
   return {
     isbn,
     title: summary.title,
-    author: summary.author || '',
+    author: normalizeAuthor(summary.author),
     publisher: summary.publisher || '',
     coverUrl: summary.cover || '',
     price,
@@ -51,9 +51,15 @@ export function stripParallelTitle(title) {
   return (title || '').split(/\s+[=＝]\s+/)[0].trim();
 }
 
-// NDLの著者は「姓, 名」形式 → カンマを取り「姓 名」に
-function cleanNdlCreator(creator) {
-  return (creator || '').replace(/,\s*/g, ' ').trim();
+// 著者名の表記ゆれを全ソース共通で「姓 名」半角スペース区切りに寄せる
+// （NDLの「姓, 名」カンマ・全角スペース・連続スペースを正規化。姓名が区切りなしで
+//  連結されたケースは分割点を判定できないため空白を挿入できない＝そのまま返す）
+export function normalizeAuthor(s) {
+  return (s || '')
+    .replace(/,\s*/g, ' ')   // NDLの「姓, 名」→「姓 名」
+    .replace(/　/g, ' ') // 全角スペース→半角スペース
+    .replace(/\s+/g, ' ')    // 連続スペースを1個に
+    .trim();
 }
 
 const DC_NS = 'http://purl.org/dc/elements/1.1/';
@@ -79,7 +85,7 @@ async function lookupNdl(isbn) {
   return {
     isbn,
     title: stripParallelTitle(title),
-    author: cleanNdlCreator(dcText(item, 'creator')),
+    author: normalizeAuthor(dcText(item, 'creator')),
     publisher: dcText(item, 'publisher'),
     coverUrl: '', // NDLは表紙を返さない（サムネイルAPIは403）→ lookupIsbnでGoogle Booksから補完
     price: null,
@@ -94,7 +100,7 @@ async function lookupGoogleBooks(isbn) {
   return {
     isbn,
     title: info.title,
-    author: (info.authors || []).join('・'),
+    author: normalizeAuthor((info.authors || []).join('・')),
     publisher: info.publisher || '',
     coverUrl: (info.imageLinks?.thumbnail || '').replace(/^http:/, 'https:'),
     price: null,
