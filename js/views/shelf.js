@@ -2,7 +2,7 @@
 // デザインの正: design/design_spec.json（本棚=realistic、一覧=list）
 
 import { getAllBooks, deleteBook, updateBook } from '../db.js';
-import { stripParallelTitle, amazonCoverUrl } from '../bookapi.js';
+import { stripParallelTitle, amazonCoverUrl, normalizeAuthor } from '../bookapi.js';
 
 const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 // データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
@@ -705,7 +705,7 @@ async function cleanupLegacyData() {
     let dirty = false;
     const title = stripParallelTitle(b.title);
     if (title && title !== b.title) { b.title = title; dirty = true; }
-    const author = (b.author || '').replace(/,\s*/g, ' ').trim();
+    const author = normalizeAuthor(b.author);
     if (author !== b.author) { b.author = author; dirty = true; }
     if (!b.coverUrl && b.isbn) {
       const url = amazonCoverUrl(b.isbn);
