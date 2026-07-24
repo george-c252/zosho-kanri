@@ -26,6 +26,13 @@ async function fetchJson(url) {
   }
 }
 
+// タイトルのヨミ（あいうえお順ソート用のキー）。ひらがな→カタカナに揃え、空白・区切り記号を落とす
+export function kanaKey(s) {
+  return (s || '')
+    .replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60))
+    .replace(/[\s　・,，.。「」『』]/g, '');
+}
+
 async function lookupOpenBd(isbn) {
   const data = await fetchJson(`https://api.openbd.jp/v1/get?isbn=${isbn}`);
   const summary = data?.[0]?.summary;
@@ -35,8 +42,12 @@ async function lookupOpenBd(isbn) {
   const prices = data[0].onix?.ProductSupply?.SupplyDetail?.Price;
   const amount = Array.isArray(prices) ? prices[0]?.PriceAmount : null;
   if (amount && !Number.isNaN(Number(amount))) price = Number(amount);
+  // ONIXのcollationkeyがタイトルのヨミ（カタカナ）。無い本もある
+  const titleDetail = data[0].onix?.DescriptiveDetail?.TitleDetail;
+  const titleText = (Array.isArray(titleDetail) ? titleDetail[0] : titleDetail)?.TitleElement?.TitleText;
   return {
     isbn,
+    titleKana: kanaKey(titleText?.collationkey),
     title: summary.title,
     author: normalizeAuthor(summary.author),
     publisher: summary.publisher || '',
@@ -67,10 +78,15 @@ export function normalizeAuthor(s) {
 }
 
 const DC_NS = 'http://purl.org/dc/elements/1.1/';
+const DCNDL_NS = 'http://ndl.go.jp/dcndl/terms/';
+
+function nsText(item, ns, tag) {
+  const el = item.getElementsByTagNameNS(ns, tag)[0];
+  return el?.textContent?.trim() || '';
+}
 
 function dcText(item, tag) {
-  const el = item.getElementsByTagNameNS(DC_NS, tag)[0];
-  return el?.textContent?.trim() || '';
+  return nsText(item, DC_NS, tag);
 }
 
 async function lookupNdl(isbn) {
@@ -88,6 +104,7 @@ async function lookupNdl(isbn) {
   if (!title) return null;
   return {
     isbn,
+    titleKana: kanaKey(nsText(item, DCNDL_NS, 'titleTranscription')),
     title: stripParallelTitle(title),
     author: normalizeAuthor(dcText(item, 'creator')),
     publisher: dcText(item, 'publisher'),
@@ -103,6 +120,7 @@ async function lookupGoogleBooks(isbn) {
   if (!info?.title) return null;
   return {
     isbn,
+    titleKana: '', // Google Booksはヨミを返さない
     title: info.title,
     author: normalizeAuthor((info.authors || []).join('・')),
     publisher: info.publisher || '',
@@ -124,7 +142,13 @@ export function amazonCoverUrl(isbn13) {
   return `https://images-na.ssl-images-amazon.com/images/P/${isbn10}.09.LZZZZZZZ.jpg`;
 }
 
-// 見つかれば {isbn, title, author, publisher, coverUrl, price, source}、全滅なら null
+// ヨミだけを引き直す（あいうえお順ソート用に、登録済みの本へ後からヨミを補う）。
+// 取れなければ '' — 呼び出し側は再取得しないよう「取得済み」を記録する
+export async function lookupTitleKana(isbn) {
+  return (await lookupOpenBd(isbn))?.titleKana || (await lookupNdl(isbn))?.titleKana || '';
+}
+
+// 見つかれば {isbn, title, titleKana, author, publisher, coverUrl, price, source}、全滅なら null
 // null の場合、呼び出し側はISBN確定状態の手入力フォームを開く（仕様§5.2）
 export async function lookupIsbn(isbn) {
   const hit =

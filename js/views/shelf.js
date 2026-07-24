@@ -2,7 +2,7 @@
 // デザインの正: design/design_spec.json（本棚=realistic、一覧=list）
 
 import { getAllBooks, deleteBook, updateBook } from '../db.js';
-import { stripParallelTitle, amazonCoverUrl, normalizeAuthor } from '../bookapi.js';
+import { stripParallelTitle, amazonCoverUrl, normalizeAuthor, kanaKey, lookupTitleKana } from '../bookapi.js';
 
 const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 // データモデル（仕様§4.1）の 'finished' が正。design_spec.json の 'read' は表示層でこのラベルに吸収する
@@ -58,8 +58,16 @@ let searchEl;
 let realisticEl;
 let listWrapEl;
 let headCountEl;
+let sortEl;
 let books = [];
 let viewMode = 'realistic';
+
+// 並び順: manual=自分でドラッグして並べた順 / added=登録した順 / kana=あいうえお順。端末に記憶する
+const SORT_STORAGE_KEY = 'zosho.shelfSort';
+const SORT_MODES = ['manual', 'added', 'kana'];
+let sortMode = SORT_MODES.includes(localStorage.getItem(SORT_STORAGE_KEY))
+  ? localStorage.getItem(SORT_STORAGE_KEY)
+  : 'manual';
 
 // タイトル文字列から決定論的に背表紙の色・寸法を決める（同じ本は常に同じ見た目）
 function hashCode(str) {
@@ -534,18 +542,67 @@ function render() {
   else renderList();
 }
 
+/* ---- 並び順（手動 / 登録順 / あいうえお順） ---- */
+
+const jaCollator = new Intl.Collator('ja');
+
+// ヨミが取れている本はヨミで、取れない本はタイトルそのもので比較する
+function kanaOf(book) {
+  return book.titleKana || kanaKey(book.title);
+}
+
+// いずれのモードでも左から右＝先頭から順。同着は登録の古い順で安定させる
+function sortBooks() {
+  if (sortMode === 'kana') {
+    books.sort((a, b) => jaCollator.compare(kanaOf(a), kanaOf(b)) || a.addedAt - b.addedAt);
+  } else if (sortMode === 'added') {
+    books.sort((a, b) => a.addedAt - b.addedAt);
+  } else {
+    // 手動並び順（ドラッグ&ドロップ）。未割当（新規追加）は末尾に追加日の古い順
+    books.sort((a, b) => {
+      const ao = a.shelfOrder ?? Infinity;
+      const bo = b.shelfOrder ?? Infinity;
+      if (ao !== bo) return ao - bo;
+      return a.addedAt - b.addedAt;
+    });
+  }
+}
+
+function setSortMode(mode) {
+  sortMode = mode;
+  localStorage.setItem(SORT_STORAGE_KEY, mode);
+  if (sortEl) sortEl.value = mode;
+}
+
+// 登録済みの本にヨミが無ければ書誌APIから補う（あいうえお順を選んだ時だけ・1冊ずつ・冪等）。
+// 取れなかった本は kanaFetched で覚え、起動のたびに問い合わせ直さない
+let fetchingKana = false;
+
+async function ensureTitleKana() {
+  if (fetchingKana || sortMode !== 'kana') return;
+  fetchingKana = true;
+  try {
+    let changed = false;
+    const todo = (await getAllBooks()).filter((b) => !b.titleKana && !b.kanaFetched && b.isbn);
+    if (todo.length) showToast(`ヨミを取得しています…（${todo.length}冊）`);
+    for (const b of todo) {
+      b.titleKana = await lookupTitleKana(b.isbn);
+      b.kanaFetched = true;
+      await updateBook(b);
+      changed = true;
+    }
+    if (changed) await refreshShelf();
+  } finally {
+    fetchingKana = false;
+  }
+}
+
 export async function refreshShelf() {
   books = await getAllBooks();
-  // 手動並び順（ドラッグ&ドロップ）があれば優先。未割当（新規追加）は末尾に追加日の古い順
-  // → 左から右へ登録した順に並び、新しい本は右端に足される
-  books.sort((a, b) => {
-    const ao = a.shelfOrder ?? Infinity;
-    const bo = b.shelfOrder ?? Infinity;
-    if (ao !== bo) return ao - bo;
-    return a.addedAt - b.addedAt;
-  });
+  sortBooks();
   render();
   ensureSpineColors(); // 完了を待たない（抽出できたら再描画される）
+  ensureTitleKana();   // 同上（あいうえお順のときだけ動く）
 }
 
 // 掴んだ本をドロップ位置に並び替える（棚の行→行内の背表紙中心Xで挿入位置を決める）
@@ -569,6 +626,9 @@ async function reorderBook(book, x, y) {
   if (oldIndex < 0) return;
   books.splice(oldIndex, 1);
   books.splice(newIndex, 0, book);
+  // 登録順・あいうえお順を見ている時に動かしたら、いま見えている並びを手動の並び順として引き継ぐ
+  const switched = sortMode !== 'manual';
+  if (switched) setSortMode('manual');
   let changed = false;
   for (let i = 0; i < books.length; i++) {
     if (books[i].shelfOrder !== i) {
@@ -579,7 +639,7 @@ async function reorderBook(book, x, y) {
   }
   if (changed) {
     render();
-    showToast('並び替えました');
+    showToast(switched ? '並び替えました（並び順を「並べた順」に切替）' : '並び替えました');
   }
 }
 
@@ -724,8 +784,15 @@ export function initShelf() {
   realisticEl = document.getElementById('shelf-realistic');
   listWrapEl = document.getElementById('shelf-list');
   headCountEl = document.getElementById('shelf-head-count');
+  sortEl = document.getElementById('sort-select');
 
   searchEl.addEventListener('input', renderList);
+
+  sortEl.value = sortMode;
+  sortEl.addEventListener('change', () => {
+    setSortMode(sortEl.value);
+    refreshShelf();
+  });
 
   document.querySelectorAll('#view-toggle button').forEach((btn) => {
     btn.addEventListener('click', () => {
