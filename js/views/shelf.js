@@ -536,12 +536,13 @@ function render() {
 
 export async function refreshShelf() {
   books = await getAllBooks();
-  // 手動並び順（ドラッグ&ドロップ）があれば優先。未割当（新規追加）は先頭に追加日の新しい順
+  // 手動並び順（ドラッグ&ドロップ）があれば優先。未割当（新規追加）は末尾に追加日の古い順
+  // → 左から右へ登録した順に並び、新しい本は右端に足される
   books.sort((a, b) => {
-    const ao = a.shelfOrder ?? -1;
-    const bo = b.shelfOrder ?? -1;
+    const ao = a.shelfOrder ?? Infinity;
+    const bo = b.shelfOrder ?? Infinity;
     if (ao !== bo) return ao - bo;
-    return b.addedAt - a.addedAt;
+    return a.addedAt - b.addedAt;
   });
   render();
   ensureSpineColors(); // 完了を待たない（抽出できたら再描画される）
