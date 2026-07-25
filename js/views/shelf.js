@@ -169,7 +169,7 @@ function matches(book, query) {
 
 /* ---- トースト（design_spec.json: hondanaToast 2.4s） ---- */
 
-function showToast(message) {
+export function showToast(message) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
   toast.hidden = false;

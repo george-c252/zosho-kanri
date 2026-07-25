@@ -1,9 +1,10 @@
 import { createScanner, isValidBookIsbn } from './scanner.js';
 import { lookupIsbn } from './bookapi.js';
 import { createBook, addBook, checkDuplicate } from './db.js';
-import { initShelf, refreshShelf, setTitleWithRuby } from './views/shelf.js';
+import { initShelf, refreshShelf, setTitleWithRuby, showToast } from './views/shelf.js';
 
 const video = document.getElementById('viewfinder');
+const scanViewEl = document.getElementById('scan-view');
 const statusEl = document.getElementById('status');
 const resultEl = document.getElementById('result');
 const coverEl = document.getElementById('cover');
@@ -59,7 +60,27 @@ function showBook(book) {
   manualBookEl.hidden = Boolean(book.title);
   manualTitleEl.value = '';
   manualAuthorEl.value = '';
+  enterResultMode();
+}
+
+/* ---- スキャン面 ⇄ 登録画面の切替（読み取れたら登録画面に切り替える・実機フィードバック 2026-07-25） ---- */
+
+// 読み取れたらスキャン面を丸ごと隠して登録画面だけにする（下までスクロールしなくて済むように）。
+// 表示していない間はカメラも止める
+function enterResultMode() {
   resultEl.hidden = false;
+  scanViewEl.hidden = true;
+  stopCamera();
+  window.scrollTo(0, 0);
+}
+
+// スキャン面に戻る（登録後・「スキャンに戻る」ボタン）。カメラを再起動して次の1冊へ
+function exitResultMode() {
+  resultEl.hidden = true;
+  dupBanner.hidden = true;
+  currentBook = null;
+  scanViewEl.hidden = false;
+  startCamera();
 }
 
 async function handleIsbn(isbn) {
@@ -97,13 +118,15 @@ async function register(format) {
   }
   await addBook(createBook({ ...book, format }));
   await refreshShelf();
-  setStatus(`📚 登録しました: ${book.title}（${FORMAT_LABEL[format]}）`);
-  resultEl.hidden = true;
-  currentBook = null;
+  // 登録後はスキャン面に戻す（カメラ起動メッセージで消えないよう完了通知はトーストで出す）
+  showToast(`📚 登録しました: ${book.title}（${FORMAT_LABEL[format]}）`);
+  lastAt = Date.now(); // 戻った直後に同じ本を写していても再検出しない（デバウンスを引き直す）
+  exitResultMode();
 }
 
 document.getElementById('reg-paper').addEventListener('click', () => register('paper'));
 document.getElementById('reg-ebook').addEventListener('click', () => register('ebook'));
+document.getElementById('back-to-scan').addEventListener('click', exitResultMode);
 coverEl.addEventListener('error', () => { coverEl.hidden = true; }); // 表紙URL切れは非表示に
 coverEl.addEventListener('load', () => {
   if (coverEl.naturalWidth <= 1) coverEl.hidden = true; // Amazon書影の「画像なし1x1 GIF」対策
@@ -128,6 +151,7 @@ let cameraStarting = false;
 
 async function startCamera() {
   if (cameraOn || cameraStarting) return;
+  if (!resultEl.hidden) return; // 登録画面を出している間はカメラを起こさない（タブ往復・復帰時も）
   if (!window.isSecureContext) {
     setStatus('⚠️ HTTPSではないためカメラは使えません（仕様§10）。手入力での登録は可能です。');
     return;

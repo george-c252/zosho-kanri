@@ -387,6 +387,21 @@ main {
   box-shadow: 0 1px 0 rgba(255, 255, 255, .6) inset, 0 10px 30px rgba(60, 38, 12, .18);
 }
 
+/* 登録画面からスキャン面へ戻る（読み取り後は登録画面に切り替わる） */
+#back-to-scan {
+  display: block;
+  margin: -4px 0 12px -4px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
 #dup-banner {
   padding: 10px;
   margin-bottom: 12px;
