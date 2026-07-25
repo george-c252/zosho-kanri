@@ -447,6 +447,30 @@ function renderSpine(book) {
   return btn;
 }
 
+// 背表紙のタイトルは縦1列に収める（折り返し禁止）。入り切らない本だけ文字を縮める。
+// 著者名の領域は触らない＝タイトルの高さは「背表紙の高さ − 著者名 − 余白」の残りぶん（.spine-title の flex:1）
+const SPINE_TITLE_MAX = 12;
+const SPINE_TITLE_MIN = 6;
+
+function fitSpineTitles() {
+  for (const el of realisticEl.querySelectorAll('.spine-title')) {
+    el.style.fontSize = `${SPINE_TITLE_MAX}px`;
+    el.style.letterSpacing = ''; // 測り直しに備えて毎回リセット（CSSの1pxに戻す）
+    const avail = el.clientHeight;
+    if (!avail || el.scrollHeight <= avail) continue; // 非表示中(0)は測れない → 本棚タブに戻った時に測り直す
+    el.style.letterSpacing = '0px'; // 縮める前にまず字間を詰める（文字を小さくせずに済む本がある）
+    if (el.scrollHeight <= avail) continue;
+    // letter-spacingを外しても入らない本だけ文字を縮める。比例縮小は概算なので0.5pxずつ詰め直す
+    let size = Math.max(SPINE_TITLE_MIN, Math.floor((SPINE_TITLE_MAX * avail * 2) / el.scrollHeight) / 2);
+    el.style.fontSize = `${size}px`;
+    let guard = 6;
+    while (guard-- > 0 && size > SPINE_TITLE_MIN && el.scrollHeight > avail) {
+      size = Math.max(SPINE_TITLE_MIN, size - 0.5);
+      el.style.fontSize = `${size}px`;
+    }
+  }
+}
+
 function renderRealistic() {
   realisticEl.replaceChildren();
   if (books.length === 0) {
@@ -464,6 +488,7 @@ function renderRealistic() {
     plank.className = 'shelf-plank';
     realisticEl.append(row, plank);
   }
+  fitSpineTitles(); // DOMに入れてからでないと測れない
 }
 
 /* ---- 一覧（list）ビュー ---- */
@@ -841,6 +866,11 @@ export function initShelf() {
     renderPhotoButtons(detailBook);
     render();
     showToast('背表紙写真を削除しました');
+  });
+
+  // Webフォント（明朝）の読込前に測ると字幅がズレるため、読み込み完了後に測り直す
+  document.fonts?.ready.then(() => {
+    if (viewMode === 'realistic') fitSpineTitles();
   });
 
   cleanupLegacyData(); // 完了を待たない（終わったら本棚を再描画する）
