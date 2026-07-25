@@ -206,6 +206,8 @@ main {
 .spine .spine-title {
   writing-mode: vertical-rl;
   text-orientation: mixed;
+  /* 縦1列に収める。長いタイトルは折り返さず shelf.js の fitSpineTitles() が文字を縮める */
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 1px;
