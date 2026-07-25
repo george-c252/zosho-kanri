@@ -55,7 +55,9 @@ body::after {
 main {
   max-width: 480px;
   margin: 0 auto;
-  padding: 12px 14px calc(88px + env(safe-area-inset-bottom));
+  /* 下端の余白はフローティングの#tabbar（実測 約70px＋下端12px）に被らせないための逃げ。
+     iPhoneはブラウザ下部バーぶんも重なるため厚めに取る（実機フィードバック 2026-07-25） */
+  padding: 12px 14px calc(104px + env(safe-area-inset-bottom));
 }
 
 /* ---- 画面ヘッダー ---- */
@@ -769,8 +771,12 @@ input::placeholder {
 /* criticalCSS: glassDock_ドック */
 #tabbar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  /* left:50%+transform だと幅の計算元が「画面の右半分」になり、収まらないボタンのラベルが
+     途中で改行される（2026-07-25 実機）。left/right:0 + margin auto + max-content で中央寄せする */
+  left: 0;
+  right: 0;
+  width: max-content;
+  margin: 0 auto;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   z-index: 30;
   display: flex;
@@ -790,6 +796,7 @@ input::placeholder {
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  white-space: nowrap; /* 「本 棚」「スキャ ン」と途中で折り返させない */
   padding: 9px 15px;
   border-radius: 22px;
   background: transparent;
@@ -910,8 +917,13 @@ input::placeholder {
 /* ---- トースト（design_spec.json: hondanaToast 2.4s） ---- */
 #toast {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  /* #tabbarと同じ理由で中央寄せは left/right:0 + margin auto（半分幅に潰されて改行するのを防ぐ） */
+  left: 0;
+  right: 0;
+  width: max-content;
+  max-width: min(86vw, 420px);
+  margin: 0 auto;
+  text-align: center;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 110px);
   z-index: 95;
   padding: 13px 22px;
@@ -930,8 +942,9 @@ input::placeholder {
   animation: hondanaToast 2.4s ease forwards;
 }
 
+/* 中央寄せを margin auto に変えたため、キーフレームからX方向の-50%を外す（残すと右寄りにズレる） */
 @keyframes hondanaToast {
-  0% { opacity: 0; transform: translate(-50%, 16px); }
-  12%, 88% { opacity: 1; transform: translate(-50%, 0); }
-  100% { opacity: 0; transform: translate(-50%, 16px); }
+  0% { opacity: 0; transform: translateY(16px); }
+  12%, 88% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(16px); }
 }
