@@ -117,6 +117,31 @@ main {
   box-shadow: 0 2px 6px rgba(80, 52, 20, .2);
 }
 
+/* ヘッダー右側（ビュー切替＋⚙）。タブバーを増やさないための置き場 */
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 12px;
+  background: rgba(255, 252, 245, .30);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, .5);
+  box-shadow: 0 4px 14px rgba(80, 52, 20, .16);
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
 /* 並び順セレクト（本棚・一覧の共通ツールバー） */
 #shelf-tools {
   display: flex;
@@ -221,6 +246,17 @@ main {
   opacity: .72;
   letter-spacing: 1px;
   overflow: hidden;
+}
+
+/* 電子書籍のガラス風背表紙（紙との見分け・2026-08-06）。
+   背景色はshelf.jsが半透明で塗る。ここでは磨りガラスのぼかしと白い縁を足して「実体のない本」感を出す */
+.spine.spine-ebook {
+  backdrop-filter: blur(4px) saturate(1.15);
+  -webkit-backdrop-filter: blur(4px) saturate(1.15);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45),
+    inset 0 12px 14px -10px rgba(255, 255, 255, .55),
+    -1px 0 2px rgba(0, 0, 0, .15);
+  border-radius: 3px;
 }
 
 /* 読書中の朱色しおりリボン（プロトタイプ: 背表紙上端から-9px飛び出す短冊。揺れアニメ hondanaRibbon 3.2s） */
@@ -501,7 +537,8 @@ input::placeholder {
   min-width: 0;
 }
 
-#manual-form button {
+#manual-form button,
+#title-form button {
   padding: 8px 16px;
   font-size: 1rem;
   font-family: var(--sans);
@@ -512,8 +549,62 @@ input::placeholder {
   color: #fff;
 }
 
+/* ---- タイトル検索登録（バーコードの無い電子書籍用・2026-08-06） ---- */
+#title-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#title-query {
+  flex: 1;
+  min-width: 0;
+}
+
+#title-results {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+#title-results li {
+  margin-bottom: 8px;
+}
+
+#title-results .hit {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(107, 84, 58, .25);
+  background: rgba(255, 252, 246, .8);
+  font-family: var(--sans);
+  color: var(--text-ink);
+  cursor: pointer;
+}
+
+#title-results .hit-title {
+  display: block;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+#title-results .hit-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+
+#title-results .hit-manual {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-sub);
+  background: rgba(255, 252, 246, .5);
+}
+
 /* ---- 詳細ボトムシート ---- */
-#detail-veil {
+#detail-veil, #backup-veil {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -525,7 +616,7 @@ input::placeholder {
   -webkit-backdrop-filter: blur(8px);
 }
 
-#detail-veil.open {
+#detail-veil.open, #backup-veil.open {
   display: flex;
   animation: hondanaFloat .28s ease;
 }
@@ -536,7 +627,7 @@ input::placeholder {
 }
 
 /* criticalCSS: glassSheet_ボトムシート */
-#detail-sheet {
+#detail-sheet, #backup-sheet {
   position: relative;
   width: min(480px, 100%);
   border-radius: 30px 30px 42px 42px;
@@ -556,7 +647,7 @@ input::placeholder {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #detail-sheet, #detail-veil.open, .spine-ribbon, #scan-line { animation: none; }
+  #detail-sheet, #detail-veil.open, #backup-sheet, #backup-veil.open, .spine-ribbon, #scan-line { animation: none; }
   /* animation:none だと animationend が発火せず要素が残るため極短で完了させる */
   .bookmark-fly { animation-duration: .01s; }
 }
@@ -756,6 +847,34 @@ input::placeholder {
   margin-top: 10px;
 }
 
+/* 背表紙の色パレット（16色＋自動・2026-08-06） */
+#spine-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.color-swatch {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, .18);
+  cursor: pointer;
+}
+
+.color-swatch.auto {
+  width: auto;
+  padding: 0 12px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, .4);
+  color: var(--text-ink);
+  border: none;
+}
+
 .sheet-actions {
   display: flex;
   gap: 10px;
@@ -767,6 +886,65 @@ input::placeholder {
   padding: 10px;
   font-size: 0.95rem;
   border-radius: 14px;
+}
+
+/* ---- バックアップシート ---- */
+.backup-title {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.backup-lead {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-sub);
+}
+
+.backup-count {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-ink);
+}
+
+.backup-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.status-btn.primary {
+  background: linear-gradient(160deg, var(--accent), var(--accent-deep));
+  color: #fff;
+}
+
+.status-btn:disabled {
+  opacity: .55;
+}
+
+.backup-msg {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  background: rgba(255, 255, 255, .45);
+  color: var(--text-sub);
+}
+
+.backup-msg.ok {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.backup-msg.warn {
+  border: 1px solid var(--accent-deep);
+  color: var(--accent-text);
+  font-weight: 700;
 }
 
 /* ---- フローティングドック ---- */

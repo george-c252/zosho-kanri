@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <!-- ?v= はキャッシュ更新用。デプロイ時に日付を上げる（M3のsw.jsで正式なバージョン管理に移行） -->
-  <link rel="stylesheet" href="css/style.css?v=20260725-5">
+  <link rel="stylesheet" href="css/style.css?v=20260806-1">
 </head>
 <body>
   <main>
@@ -33,6 +33,12 @@
           <input id="manual-isbn" inputmode="numeric" maxlength="13" placeholder="ISBN手入力（978から13桁）">
           <button type="submit">検索</button>
         </form>
+        <!-- タイトル検索登録: バーコードの無い電子書籍（アプリ内購入の漫画など）用（2026-08-06） -->
+        <form id="title-form">
+          <input id="title-query" placeholder="タイトルで検索（例: 呪術廻戦 20）">
+          <button type="submit">検索</button>
+        </form>
+        <ul id="title-results" hidden></ul>
       </div>
       <section id="result" hidden>
         <button id="back-to-scan" type="button">← スキャンに戻る</button>
@@ -62,9 +68,13 @@
     <section id="tab-shelf" class="tab">
       <div class="screen-head">
         <h1>本棚<span class="count" id="shelf-head-count"></span></h1>
-        <div id="view-toggle">
-          <button type="button" data-view="realistic" class="active">本棚</button>
-          <button type="button" data-view="list">一覧</button>
+        <!-- タブは増やさずここに⚙を置く（タブ3つ目はタブバー折り返しが再発するため・dev_log 2026-07-25） -->
+        <div class="head-tools">
+          <div id="view-toggle">
+            <button type="button" data-view="realistic" class="active">本棚</button>
+            <button type="button" data-view="list">一覧</button>
+          </div>
+          <button id="backup-open" class="icon-btn" type="button" aria-label="バックアップ">⚙</button>
         </div>
       </div>
       <div id="shelf-tools">
@@ -113,6 +123,11 @@
         <button id="spine-photo-del" class="status-btn" type="button" hidden>写真を削除</button>
         <input id="spine-photo-input" type="file" accept="image/*" hidden>
       </div>
+      <!-- 背表紙の色の手動指定（16色パレット＋自動・2026-08-06） -->
+      <div class="photo-actions">
+        <button id="spine-color-btn" class="status-btn" type="button">🎨 背表紙の色を変える</button>
+      </div>
+      <div id="spine-palette" hidden></div>
       <div class="sheet-actions">
         <button id="detail-delete" class="delete-btn" type="button">この本を削除</button>
       </div>
@@ -132,6 +147,25 @@
     </div>
   </div>
 
+  <!-- バックアップ（ボトムシート）。書き出したファイルの保管場所は本人が選ぶ（LINE・ドライブ等） -->
+  <div id="backup-veil">
+    <div id="backup-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="backup-title">データのバックアップ</h2>
+      <p class="backup-lead">本のデータはこの端末の中だけにあります。ときどき書き出して、LINEやドライブに送っておいてください。</p>
+      <p id="backup-count" class="backup-count"></p>
+      <div class="backup-actions">
+        <button id="backup-export" class="status-btn primary" type="button">書き出す</button>
+        <button id="backup-import" class="status-btn" type="button">読み込む</button>
+      </div>
+      <input id="backup-file" type="file" hidden>
+      <p id="backup-msg" class="backup-msg" hidden></p>
+      <div class="sheet-actions">
+        <button id="backup-close" class="status-btn" type="button">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- トースト（hondanaToast 2.4s） -->
   <div id="toast" hidden></div>
 
@@ -143,6 +177,6 @@
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>
-  <script type="module" src="js/main.js?v=20260725-5"></script>
+  <script type="module" src="js/main.js?v=20260806-1"></script>
 </body>
 </html>

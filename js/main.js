@@ -1,7 +1,8 @@
 import { createScanner, isValidBookIsbn } from './scanner.js';
-import { lookupIsbn } from './bookapi.js';
-import { createBook, addBook, checkDuplicate } from './db.js';
+import { lookupIsbn, searchByTitle } from './bookapi.js';
+import { createBook, addBook, checkDuplicate, checkDuplicateByTitle } from './db.js';
 import { initShelf, refreshShelf, setTitleWithRuby, showToast } from './views/shelf.js';
+import { initBackup } from './backup.js';
 
 const video = document.getElementById('viewfinder');
 const scanViewEl = document.getElementById('scan-view');
@@ -14,6 +15,9 @@ const manualInput = document.getElementById('manual-isbn');
 const manualBookEl = document.getElementById('manual-book');
 const manualTitleEl = document.getElementById('manual-title');
 const manualAuthorEl = document.getElementById('manual-author');
+const titleForm = document.getElementById('title-form');
+const titleQueryEl = document.getElementById('title-query');
+const titleResultsEl = document.getElementById('title-results');
 
 const FORMAT_LABEL = { paper: '紙', ebook: '電子' };
 
@@ -49,7 +53,9 @@ function showBook(book) {
   setTitleWithRuby(document.getElementById('book-title'), book.title || '（書誌情報なし — 手入力で登録）');
   document.getElementById('book-author').textContent = book.author || '';
   document.getElementById('book-publisher').textContent = book.publisher || '';
-  document.getElementById('book-isbn').textContent = `ISBN: ${book.isbn}`;
+  document.getElementById('book-isbn').textContent = book.isbn
+    ? `ISBN: ${book.isbn}`
+    : 'ISBNなし（タイトルで登録）';
   if (book.coverUrl) {
     coverEl.src = book.coverUrl;
     coverEl.hidden = false;
@@ -111,7 +117,10 @@ async function register(format) {
       return;
     }
   }
-  const dup = await checkDuplicate(book.isbn);
+  // ISBNの無い本（タイトル検索・手入力）はタイトルで重複を見る
+  const dup = book.isbn
+    ? await checkDuplicate(book.isbn)
+    : await checkDuplicateByTitle(book.title);
   if (dup.owned && dup.formats.includes(format)) {
     setStatus(`すでに${FORMAT_LABEL[format]}で登録済みです`);
     return;
@@ -141,6 +150,82 @@ manualForm.addEventListener('submit', (e) => {
   }
   lastIsbn = ''; // 手入力は常に照会し直す
   handleIsbn(isbn);
+});
+
+/* ---- タイトル検索登録（バーコードの無い電子書籍など・2026-08-06） ---- */
+
+// 候補を選んだら、スキャン検出と同じ登録画面（紙/電子ボタン）に流し込む
+async function selectTitleHit(hit) {
+  currentBook = {
+    isbn: hit.isbn || null,
+    title: hit.title,
+    titleKana: hit.titleKana || '',
+    author: hit.author || '',
+    publisher: hit.publisher || '',
+    coverUrl: hit.coverUrl || '',
+    price: null,
+  };
+  const dup = hit.isbn ? await checkDuplicate(hit.isbn) : await checkDuplicateByTitle(hit.title);
+  showDupBanner(dup);
+  showBook(currentBook);
+  setStatus(`取得成功（${hit.source}）`);
+}
+
+// 検索で見つからない本のための素の手入力（ISBNなしで登録される）
+function startManualEntry(prefillTitle) {
+  currentBook = { isbn: null, title: '', author: '', publisher: '', coverUrl: '', price: null };
+  dupBanner.hidden = true;
+  showBook(currentBook); // タイトルが空なので手入力欄が開く
+  manualTitleEl.value = prefillTitle || '';
+  setStatus('手入力で登録できます');
+}
+
+function renderTitleResults(hits, query) {
+  titleResultsEl.replaceChildren();
+  for (const hit of hits) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'hit';
+    const title = document.createElement('span');
+    title.className = 'hit-title';
+    setTitleWithRuby(title, hit.title);
+    const sub = document.createElement('span');
+    sub.className = 'hit-sub';
+    sub.textContent = [hit.author, hit.publisher, hit.issued && `${hit.issued}年`]
+      .filter(Boolean)
+      .join(' ／ ');
+    btn.append(title, sub);
+    btn.addEventListener('click', () => selectTitleHit(hit));
+    li.appendChild(btn);
+    titleResultsEl.appendChild(li);
+  }
+  // 末尾に手入力への逃げ道を常に置く（仕様§5.2: 登録は必ず完了できる）
+  const li = document.createElement('li');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'hit hit-manual';
+  btn.textContent = hits.length
+    ? '見つからない？ — 手入力で登録する'
+    : '手入力で登録する';
+  btn.addEventListener('click', () => startManualEntry(query));
+  li.appendChild(btn);
+  titleResultsEl.appendChild(li);
+  titleResultsEl.hidden = false;
+}
+
+titleForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const query = titleQueryEl.value.trim();
+  if (!query) return;
+  setStatus(`「${query}」を検索中…`);
+  const hits = await searchByTitle(query);
+  renderTitleResults(hits, query);
+  setStatus(
+    hits.length
+      ? `${hits.length}件見つかりました — 巻数まで合っているか確かめて選んでください`
+      : '見つかりませんでした — 巻数や表記を変えて再検索するか、手入力で登録できます'
+  );
 });
 
 // カメラはスキャンタブを開いた時だけ起動し、離れたら停止する
@@ -195,3 +280,4 @@ document.addEventListener('visibilitychange', () => {
 });
 
 initShelf();
+initBackup();

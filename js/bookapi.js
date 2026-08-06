@@ -3,9 +3,9 @@
 
 const TIMEOUT_MS = 5000;
 
-async function fetchWithTimeout(url) {
+async function fetchWithTimeout(url, timeoutMs = TIMEOUT_MS) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     return res.ok ? res : null;
@@ -140,6 +140,130 @@ export function amazonCoverUrl(isbn13) {
   const check = (11 - (sum % 11)) % 11;
   const isbn10 = core + (check === 10 ? 'X' : String(check));
   return `https://images-na.ssl-images-amazon.com/images/P/${isbn10}.09.LZZZZZZZ.jpg`;
+}
+
+// ISBN表記ゆれの正規化: ハイフン・空白を除去し、ISBN10は13桁（978始まり）に変換する。
+// NDLのタイトル検索はISBNを「4-7974-7601-X」のような10桁ハイフン付きで返すことがある
+export function isbnTo13(raw) {
+  const s = (raw || '').replace(/[-\s]/g, '').toUpperCase();
+  if (/^97[89]\d{10}$/.test(s)) return s;
+  if (/^\d{9}[0-9X]$/.test(s)) {
+    const core = '978' + s.slice(0, 9);
+    const sum = [...core].reduce((acc, d, i) => acc + Number(d) * (i % 2 === 0 ? 1 : 3), 0);
+    return core + String((10 - (sum % 10)) % 10);
+  }
+  return '';
+}
+
+/* ---- タイトル検索（バーコードの無い電子書籍などの登録用・2026-08-06） ----
+   NDLサーチのopensearchは title= でも引ける（CORSは isbn= と同一エンドポイントで確認済み）。
+   関連CD・楽譜・同人誌も混ざるため「978/979のISBNを持つもの」だけに絞る。
+   itemの切り出しをDOMParserでなく正規表現でやるのは、nodeでそのまま実測テストするため
+   （NDLのitem構造はフラットで安定していることを2026-08-06に実レスポンスで確認） */
+
+function decodeXml(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function tagText(xml, tag) {
+  const m = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
+  return m ? decodeXml(m[1]).trim() : '';
+}
+
+// dc:creator は「芥見, 下々, 1992-」形式 → 末尾の生没年を落としてから正規化する。
+// 団体著者の「芳文社 (1950年)」のような設立年カッコも落とす
+function creatorsOf(item) {
+  const names = [...item.matchAll(/<dc:creator>([^<]*)<\/dc:creator>/g)]
+    .map((m) =>
+      normalizeAuthor(
+        decodeXml(m[1])
+          .replace(/,\s*\d{4}-?(\d{4})?\s*$/, '')
+          .replace(/\s*[（(]\d{4}年?[）)]\s*$/, '')
+      )
+    )
+    .filter(Boolean);
+  return [...new Set(names)].join('・');
+}
+
+function ndlIsbnOf(item) {
+  for (const m of item.matchAll(/<dc:identifier xsi:type="dcndl:ISBN(?:13)?">([^<]+)<\/dc:identifier>/g)) {
+    const isbn = isbnTo13(m[1]);
+    if (isbn) return isbn;
+  }
+  return '';
+}
+
+async function searchNdlByTitle(query) {
+  // NDLのタイトル検索は初回6秒超かかることがある（2026-08-06実測）→ ISBN照会より長めに待つ
+  const res = await fetchWithTimeout(
+    `https://ndlsearch.ndl.go.jp/api/opensearch?title=${encodeURIComponent(query)}&cnt=20`,
+    10000
+  );
+  if (!res) return [];
+  const xml = await res.text();
+  const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+  const hits = [];
+  const seen = new Set();
+  for (const item of items) {
+    const isbn = ndlIsbnOf(item);
+    const title = stripParallelTitle(tagText(item, 'dc:title'));
+    if (!isbn || !title || seen.has(isbn)) continue; // ISBNの無いもの（同人誌・CD等）は候補にしない
+    seen.add(isbn);
+    const volume = tagText(item, 'dcndl:volume');
+    hits.push({
+      isbn,
+      title: volume ? `${title} ${volume}` : title,
+      titleKana: kanaKey(tagText(item, 'dcndl:titleTranscription')) + volume,
+      author: creatorsOf(item),
+      publisher: tagText(item, 'dc:publisher'),
+      issued: tagText(item, 'dcterms:issued').match(/\d{4}/)?.[0] || '', // 「[2021]」形式にも対応
+      coverUrl: amazonCoverUrl(isbn),
+      price: null,
+      source: 'NDL',
+    });
+  }
+  return hits.slice(0, 10);
+}
+
+// Google Booksはタイトル検索の補欠（匿名利用の日次クォータで429になることがある実測済み）。
+// 電子専売などNDLに無い本を拾う。ISBNが無い本も候補に出す（登録側がISBNなしに対応）
+async function searchGoogleByTitle(query) {
+  const data = await fetchJson(
+    `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(query)}&maxResults=10&country=JP`
+  );
+  const hits = [];
+  for (const it of data?.items || []) {
+    const info = it.volumeInfo;
+    if (!info?.title) continue;
+    const isbn = isbnTo13(
+      (info.industryIdentifiers || []).find((x) => x.type?.startsWith('ISBN'))?.identifier || ''
+    );
+    hits.push({
+      isbn: isbn || null,
+      title: info.title,
+      titleKana: '',
+      author: normalizeAuthor((info.authors || []).join('・')),
+      publisher: info.publisher || '',
+      issued: (info.publishedDate || '').slice(0, 4),
+      coverUrl:
+        (info.imageLinks?.thumbnail || '').replace(/^http:/, 'https:') ||
+        (isbn ? amazonCoverUrl(isbn) : ''),
+      price: null,
+      source: 'Google Books',
+    });
+  }
+  return hits;
+}
+
+// タイトルで候補を探す。NDL優先・0件ならGoogle Booksに落とす
+export async function searchByTitle(query) {
+  const ndl = await searchNdlByTitle(query);
+  return ndl.length ? ndl : searchGoogleByTitle(query);
 }
 
 // ヨミだけを引き直す（あいうえお順ソート用に、登録済みの本へ後からヨミを補う）。

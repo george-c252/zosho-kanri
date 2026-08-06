@@ -100,6 +100,29 @@ export async function deleteBook(id) {
   return toPromise(store.delete(id));
 }
 
+// バックアップの書き出し／読み込みで欲しいリストも丸ごと扱うための入出力
+export async function getAllWishlist() {
+  const store = await getStore('wishlist');
+  return toPromise(store.getAll());
+}
+
+export async function putWishlist(entry) {
+  const store = await getStore('wishlist', 'readwrite');
+  return toPromise(store.put(entry));
+}
+
+// タイトルでの重複判定（タイトル検索登録・ISBNの無い本用・2026-08-06）。
+// 空白と大文字小文字のゆれだけ吸収して同一タイトルを探す
+function normTitle(s) {
+  return (s || '').replace(/[\s　]+/g, '').toLowerCase();
+}
+
+export async function checkDuplicateByTitle(title) {
+  if (!title) return { owned: false };
+  const hits = (await getAllBooks()).filter((b) => normTitle(b.title) === normTitle(title));
+  return hits.length ? { owned: true, formats: hits.map((b) => b.format) } : { owned: false };
+}
+
 // 重複判定（仕様§4.3）
 export async function checkDuplicate(isbn) {
   const db = await openDb();

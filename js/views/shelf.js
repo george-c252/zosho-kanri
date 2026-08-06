@@ -77,8 +77,10 @@ function hashCode(str) {
 }
 
 function spineStyle(book) {
-  const h = hashCode(book.id || book.title || '');
-  // 3段フォールバックの②: 表紙から抽出した色があれば優先。無ければ③hash割当（仕様§6.1）
+  // タイトル基準のhash: 同じタイトルなら紙と電子で同じ色・同じ寸法になる
+  // （以前はid基準で、紙/電子の別ID扱いにより同タイトルでも色が割れていた — 2026-08-06修正）
+  const h = hashCode(book.title || book.id || '');
+  // 3段フォールバックの②: 手動指定または表紙から抽出した色があれば優先。無ければ③hash割当（仕様§6.1）
   const color = book.spineColor || SPINE_PALETTE[h % SPINE_PALETTE.length];
   return {
     color,
@@ -377,6 +379,7 @@ function openDetail(book) {
   document.getElementById('detail-added').textContent = new Date(book.addedAt).toLocaleDateString('ja-JP');
   renderStatus(book);
   renderPhotoButtons(book);
+  document.getElementById('spine-palette').hidden = true; // 開くたびパレットは畳んだ状態に戻す
   veil().classList.add('open');
 }
 
@@ -407,12 +410,21 @@ function spineImageUrl(book) {
   return url;
 }
 
+// #rrggbb → rgba()。電子書籍のガラス風背表紙（半透明）に使う
+function hexToRgba(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 // 書誌データは textContent で挿入する（XSS対策・仕様§9）
 function renderSpine(book) {
   const btn = document.createElement('button');
   btn.className = 'spine';
   btn.type = 'button';
   btn.dataset.id = book.id; // 並び替えのドロップ位置判定用
+  // 電子書籍は半透明のガラス風にして紙と見分ける（実体が棚に無い本・2026-08-06）
+  const glassy = book.format === 'ebook';
+  if (glassy) btn.classList.add('spine-ebook');
   const { color, height, width } = spineStyle(book);
   btn.style.height = `${height}px`;
   btn.style.width = `${width}px`;
@@ -420,7 +432,9 @@ function renderSpine(book) {
     // 実物写真スピン（3段フォールバックの①）。写真に書名が写っているため文字は重ねない
     btn.style.background = `url("${spineImageUrl(book)}") center / cover no-repeat`;
   } else {
-    btn.style.background = `linear-gradient(90deg, rgba(255,255,255,.18), rgba(0,0,0,.14) 60%), ${color.bg}`;
+    btn.style.background = glassy
+      ? `linear-gradient(90deg, rgba(255,255,255,.30), rgba(255,255,255,.06) 55%), ${hexToRgba(color.bg, 0.55)}`
+      : `linear-gradient(90deg, rgba(255,255,255,.18), rgba(0,0,0,.14) 60%), ${color.bg}`;
     btn.style.color = color.fg;
     const title = document.createElement('span');
     title.className = 'spine-title';
@@ -783,6 +797,48 @@ function initCropper() {
   cropEl('crop-ok').addEventListener('click', cropConfirm);
 }
 
+/* ---- 背表紙の色の手動指定（16色パレットから選ぶ・2026-08-06） ---- */
+
+async function setSpineColor(color, message) {
+  if (!detailBook) return;
+  detailBook.spineColor = color;
+  await updateBook(detailBook);
+  render();
+  // 詳細シートの表紙プレースホルダーにも新しい色を反映する。
+  // openDetailはパレットを畳むため、色を試し比べできるよう開閉状態を保つ
+  const paletteEl = document.getElementById('spine-palette');
+  const wasOpen = !paletteEl.hidden;
+  openDetail(detailBook);
+  paletteEl.hidden = !wasOpen;
+  showToast(message);
+}
+
+function initSpineColorPicker() {
+  const paletteEl = document.getElementById('spine-palette');
+  for (const c of SPINE_PALETTE) {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'color-swatch';
+    swatch.style.background = c.bg;
+    swatch.setAttribute('aria-label', `背表紙の色 ${c.bg}`);
+    swatch.addEventListener('click', () => setSpineColor({ ...c }, '🎨 背表紙の色を変えました'));
+    paletteEl.appendChild(swatch);
+  }
+  // 「自動」= 手動指定を解除。表紙があれば色抽出が引き直し、無ければタイトルから決まる
+  const auto = document.createElement('button');
+  auto.type = 'button';
+  auto.className = 'color-swatch auto';
+  auto.textContent = '自動';
+  auto.addEventListener('click', async () => {
+    await setSpineColor(null, '自動の配色に戻しました');
+    ensureSpineColors(); // 表紙のある本は抽出し直す（完了を待たない）
+  });
+  paletteEl.appendChild(auto);
+  document.getElementById('spine-color-btn').addEventListener('click', () => {
+    paletteEl.hidden = !paletteEl.hidden;
+  });
+}
+
 // 既存データの一度きり整形: NDL並列タイトル・姓名間カンマの除去＋表紙URLのバックフィル（2026-07-22フィードバック対応）
 async function cleanupLegacyData() {
   const all = await getAllBooks();
@@ -859,6 +915,7 @@ export function initShelf() {
     });
   });
   initCropper();
+  initSpineColorPicker();
   document.getElementById('spine-photo-del').addEventListener('click', async () => {
     if (!detailBook) return;
     detailBook.spineImage = null;
