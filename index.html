@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <!-- ?v= はキャッシュ更新用。デプロイ時に日付を上げる（M3のsw.jsで正式なバージョン管理に移行） -->
-  <link rel="stylesheet" href="css/style.css?v=20260806-1">
+  <link rel="stylesheet" href="css/style.css?v=20260826-1">
 </head>
 <body>
   <main>
@@ -18,6 +18,9 @@
         <h1>スキャン</h1>
       </div>
       <p id="status"></p>
+      <!-- カメラ起動に失敗した時だけ出す。押し直しはユーザー操作からの起動になるため、
+           iOSが許可を聞き直してくれることがある（2026-08-26） -->
+      <button id="camera-retry" type="button" hidden>もう一度カメラを試す</button>
       <!-- スキャン面。読み取れたら丸ごと隠して下の登録画面（#result）に切り替える -->
       <div id="scan-view">
         <!-- 朱色コーナー＋走査線はプロトタイプ本棚.dc.htmlのスキャン枠を移植 -->
@@ -177,6 +180,6 @@
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"
           integrity="sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB"
           crossorigin="anonymous"></script>
-  <script type="module" src="js/main.js?v=20260806-1"></script>
+  <script type="module" src="js/main.js?v=20260826-1"></script>
 </body>
 </html>

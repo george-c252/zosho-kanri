@@ -162,7 +162,10 @@ async function handleExport(btn) {
     else if (result === 'shared') setMessage(`${data.books.length}冊（${size}）を書き出しました`, 'ok');
     else setMessage(`${data.books.length}冊（${size}）をこの端末に保存しました`, 'ok');
   } catch (err) {
-    setMessage(`書き出せませんでした: ${err.message}`, 'warn');
+    // 例外の message をそのまま出さない（読んでも次の一手が分からない・lessons #001）。
+    // 原因の切り分けは開発者向けにコンソールへ残す
+    console.error('バックアップの書き出しに失敗', err);
+    setMessage('書き出せませんでした。少し待ってから、もう一度お試しください。', 'warn');
   } finally {
     btn.disabled = false;
   }

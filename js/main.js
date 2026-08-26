@@ -231,8 +231,32 @@ titleForm.addEventListener('submit', async (e) => {
 // カメラはスキャンタブを開いた時だけ起動し、離れたら停止する
 // （常時オンを嫌う実機フィードバック 2026-07-22。stop→再startのiOS互換は実機で要確認）
 const scanner = createScanner();
+const retryBtn = document.getElementById('camera-retry');
 let cameraOn = false;
 let cameraStarting = false;
+
+// 起動できなかった理由ごとに「次にやること」を日本語で返す（仕様§9）。
+// err.name をそのまま画面に出さない。NotAllowedError は「許可が下りていない」時にも
+// 「映像の再生を止められた」時にも付く名前で、読んでも次の一手が分からない（lessons #001）
+function cameraErrorMessage(err) {
+  if (err.stage === 'unsupported') {
+    return 'このブラウザではカメラを使えません。Safariでこのページを開き直すと使えます。手入力での登録は可能です。';
+  }
+  if (err.stage === 'playback') {
+    return 'カメラの映像が始まりませんでした。低電力モード（バッテリーのマークが黄色）を切ると直ることがあります。手入力での登録は可能です。';
+  }
+  const causeName = err.cause && err.cause.name;
+  if (causeName === 'NotFoundError' || causeName === 'OverconstrainedError') {
+    return 'カメラが見つかりませんでした。手入力での登録は可能です。';
+  }
+  if (causeName === 'NotReadableError') {
+    return 'ほかのアプリがカメラを使っています。カメラアプリなどを閉じてから、もう一度お試しください。';
+  }
+  if (err.stage === 'permission') {
+    return 'カメラの使用が許可されていません。ホーム画面のアイコンではなくSafariでこのページを開き直すか、iPhoneの「設定 → Safari → カメラ」を「確認」にしてからお試しください。手入力での登録は可能です。';
+  }
+  return 'カメラを起動できませんでした。もう一度お試しください。手入力での登録は可能です。';
+}
 
 async function startCamera() {
   if (cameraOn || cameraStarting) return;
@@ -242,17 +266,22 @@ async function startCamera() {
     return;
   }
   cameraStarting = true;
+  retryBtn.hidden = true;
   setStatus('カメラ起動中…');
   try {
     await scanner.start(video, handleIsbn);
     cameraOn = true;
     setStatus('カメラ起動済み — バーコードをかざしてください');
   } catch (err) {
-    setStatus(`カメラを起動できません: ${err.name}。手入力での登録は可能です。`);
+    setStatus(cameraErrorMessage(err));
+    // 押し直しはユーザー操作からの起動になるため、iOSが許可を聞き直してくれることがある
+    retryBtn.hidden = false;
   } finally {
     cameraStarting = false;
   }
 }
+
+retryBtn.addEventListener('click', startCamera);
 
 function stopCamera() {
   if (!cameraOn) return;

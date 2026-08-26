@@ -370,6 +370,26 @@ main {
   color: var(--text-sub);
 }
 
+/* カメラ起動に失敗した時だけ出る再試行ボタン（2026-08-26） */
+#camera-retry {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin: 0 0 10px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .55);
+  color: var(--text-ink);
+  cursor: pointer;
+}
+
+#camera-retry[hidden] {
+  display: none;
+}
+
 /* スキャン枠（プロトタイプのreticle: 朱色コーナー＋走査線 hondanaScan 2.2s） */
 #viewfinder-wrap {
   position: relative;
